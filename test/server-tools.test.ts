@@ -891,6 +891,53 @@ describe("server tools auth helper", () => {
     expect(hostClearFetch).not.toHaveBeenCalled();
   });
 
+  test("ambiguous broker refresh errors do not clear saved auth", async () => {
+    const { input } = await createInput();
+    process.env.OPENCODE_SUPABASE_BROKER_URL = "https://example.com/broker";
+    const savedAuth = {
+      access: "expired-access",
+      refresh: "saved-refresh",
+      expires: Date.now() - 1_000,
+    };
+    await writeSavedAuth(input, savedAuth);
+
+    const hostClearFetch: FetchLike = mock(async () => new Response(null, { status: 204 }));
+    const fetchMock: FetchLike = mock(async (request, init) => {
+      const url = String(request);
+      if (url === "https://example.com/broker/refresh") {
+        expect(init?.method).toBe("POST");
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: "invalid_request",
+              message: "broker rejected malformed refresh request",
+            },
+          }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      return hostClearFetch(request, init);
+    });
+
+    await expect(
+      ensureSupabaseToolAuth(
+        input,
+        {
+          clientId: "plugin-client",
+          oauthPort: 17686,
+        },
+        { fetch: fetchMock },
+      ),
+    ).rejects.toThrow("Supabase auth refresh failed: broker rejected malformed refresh request");
+
+    await expect(readSavedAuth(input)).resolves.toEqual({ version: 1, auth: savedAuth });
+    expect(hostClearFetch).not.toHaveBeenCalled();
+  });
+
   test("shared stale refresh rejection clears host auth for each joined directory", async () => {
     const root = await mkdtemp(join(tmpdir(), "opencode-supabase-tools-"));
     cleanupPaths.push(root);
@@ -930,8 +977,10 @@ describe("server tools auth helper", () => {
         brokerRefreshCalls += 1;
         return new Response(
           JSON.stringify({
-            error: "unauthorized",
-            message: "upstream token request was rejected",
+            error: {
+              code: "unauthorized",
+              message: "upstream token request was rejected",
+            },
           }),
           {
             status: 401,

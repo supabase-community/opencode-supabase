@@ -144,7 +144,7 @@ describe("server auth hook", () => {
           new Response(
             JSON.stringify({
               error: {
-                code: "invalid_grant",
+                code: "unauthorized",
                 message: "Refresh token expired",
               },
             }),
