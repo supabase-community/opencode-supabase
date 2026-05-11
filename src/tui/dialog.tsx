@@ -37,6 +37,7 @@ type OAuthState =
   | { type: "checking_auth" }
   | { type: "idle" }
   | { type: "already_connected" }
+  | { type: "notice"; notice: AuthNotice }
   | { type: "authorizing"; url: string }
   | { type: "waiting_callback"; url: string }
   | { type: "success" }
@@ -53,8 +54,14 @@ type AuthData = {
 
 type AuthStatus =
   | { status: "connected"; checked: boolean }
-  | { status: "disconnected"; checked: boolean }
+  | { status: "disconnected"; checked: boolean; notice?: AuthNotice }
   | { status: "refresh_required"; checked: true };
+
+type AuthNotice = {
+  type: "auth_store_reset";
+  message: string;
+  backupPath: string;
+};
 
 type AuthFlowContext = {
   api: TuiPluginApi;
@@ -169,17 +176,48 @@ function SupabaseSpinnerDialog(props: {
   ), { onClose: props.dismissible ? props.onClose : () => undefined });
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseAuthNotice(value: unknown): AuthNotice | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  if (value.type === "auth_store_reset" && typeof value.message === "string" && typeof value.backupPath === "string") {
+    return {
+      type: "auth_store_reset",
+      message: value.message,
+      backupPath: value.backupPath,
+    };
+  }
+
+  return undefined;
+}
+
 function parseAuthStatus(instructions: string): AuthStatus {
   const parsed = JSON.parse(instructions) as Partial<AuthStatus>;
   if (
     parsed.status === "connected" ||
-    parsed.status === "disconnected" ||
     parsed.status === "refresh_required"
   ) {
     return parsed as AuthStatus;
   }
 
+  if (parsed.status === "disconnected") {
+    return {
+      status: "disconnected",
+      checked: parsed.checked === true,
+      notice: parseAuthNotice(parsed.notice),
+    };
+  }
+
   throw new Error("Invalid Supabase auth status response");
+}
+
+function noticeMessage(notice: AuthNotice) {
+  return `The local Supabase auth file was corrupted, so auth was reset.\n\nThe corrupted file was preserved here:\n${notice.backupPath}\n\nReconnect to continue.`;
 }
 
 async function openBrowser(url: string, logger: SupabaseLogger) {
@@ -363,6 +401,11 @@ export async function runAuthPreflight(context: Pick<AuthFlowContext, "api" | "l
     }
 
     if (status.status === "disconnected") {
+      if (status.notice) {
+        context.setState({ type: "notice", notice: status.notice });
+        return;
+      }
+
       context.setState({ type: "idle" });
       return;
     }
@@ -515,6 +558,15 @@ export function SupabaseDialog(props: SupabaseDialogProps) {
     return props.api.ui.DialogConfirm({
       title: "Connect your Supabase account",
       message: "Open your browser to authorize OpenCode to access your Supabase account.",
+      onConfirm: startOAuth,
+      onCancel: closeDialog,
+    });
+  }
+
+  if (currentState.type === "notice") {
+    return props.api.ui.DialogConfirm({
+      title: "Supabase auth reset",
+      message: noticeMessage(currentState.notice),
       onConfirm: startOAuth,
       onCancel: closeDialog,
     });

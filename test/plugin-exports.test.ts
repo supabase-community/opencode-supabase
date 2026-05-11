@@ -643,6 +643,109 @@ test("supabase auth preflight reports already connected when saved auth is still
   expect(states).toEqual([{ type: "checking_auth" }, { type: "already_connected" }]);
 });
 
+test("supabase auth preflight surfaces corrupt-store notice", async () => {
+  const states: Array<Record<string, unknown>> = [];
+  const notice = {
+    type: "auth_store_reset",
+    message: "Supabase auth was reset because the local auth store was corrupted. Reconnect to continue.",
+    backupPath: "/tmp/project/.opencode/supabase-auth.corrupt-2026-05-11T10-20-30-000Z.json",
+  };
+  const api = createDialogApi({
+    client: {
+      app: { log: (_input: unknown) => Promise.resolve(true) },
+      tui: {
+        clearPrompt: () => Promise.resolve({ data: true }),
+        appendPrompt: (_input: unknown) => Promise.resolve({ data: true }),
+        submitPrompt: () => Promise.resolve({ data: true }),
+      },
+      session: { promptAsync: () => Promise.resolve({ data: true }) },
+      provider: {
+        oauth: {
+          authorize: ({ method }: { method?: number }) => {
+            if (method === 1) {
+              return Promise.resolve({
+                data: {
+                  url: "https://supabase.com/",
+                  instructions: JSON.stringify({ status: "disconnected", checked: false, notice }),
+                  method: "code",
+                },
+              });
+            }
+            return Promise.resolve({ data: { url: "https://example.com/auth", instructions: "Test", method: "manual" } });
+          },
+          callback: () => Promise.resolve({ data: true }),
+        },
+      },
+    },
+  });
+
+  await runAuthPreflight({
+    api: api as never,
+    logger: createLogger(),
+    setState: (state) => {
+      states.push(state as unknown as Record<string, unknown>);
+    },
+  });
+
+  expect(states).toEqual([{ type: "checking_auth" }, { type: "notice", notice }]);
+});
+
+test("supabase dialog notice shows backup path and reconnect action", async () => {
+  let authorizeCalls = 0;
+  const api = createDialogApi({
+    client: {
+      app: { log: (_input: unknown) => Promise.resolve(true) },
+      tui: {
+        clearPrompt: () => Promise.resolve({ data: true }),
+        appendPrompt: (_input: unknown) => Promise.resolve({ data: true }),
+        submitPrompt: () => Promise.resolve({ data: true }),
+      },
+      session: {
+        create: () => Promise.resolve({ data: { id: "ses-notice" } }),
+        promptAsync: () => Promise.resolve({ data: true }),
+      },
+      provider: {
+        oauth: {
+          authorize: ({ method }: { method?: number }) => {
+            authorizeCalls += 1;
+            return Promise.resolve({
+              data: {
+                url: method === 1 ? "https://supabase.com/" : "https://example.com/auth",
+                instructions: method === 1 ? JSON.stringify({ status: "disconnected", checked: false }) : "Test",
+                method: "manual",
+              },
+            });
+          },
+          callback: () => Promise.resolve({ data: true }),
+        },
+      },
+    },
+  });
+  const backupPath = "/tmp/project/.opencode/supabase-auth.corrupt-2026-05-11T10-20-30-000Z.json";
+
+  const dialog = SupabaseDialog({
+    api: api as never,
+    logger: createLogger(),
+    onClose: () => api.ui.dialog.clear(),
+    initialState: {
+      type: "notice",
+      notice: {
+        type: "auth_store_reset",
+        message: "Supabase auth was reset because the local auth store was corrupted. Reconnect to continue.",
+        backupPath,
+      },
+    },
+  }) as { title?: string; message?: string; onConfirm?: () => Promise<void>; onCancel?: () => void };
+
+  expect(dialog.title).toBe("Supabase auth reset");
+  expect(dialog.message).toContain("local Supabase auth file was corrupted");
+  expect(dialog.message).toContain(backupPath);
+
+  await dialog.onConfirm?.();
+
+  expect(authorizeCalls).toBe(1);
+});
+
 test("supabase auth preflight shows unknown state when refresh verification fails", async () => {
   const states: Array<Record<string, unknown>> = [];
   const api = createDialogApi({
