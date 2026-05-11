@@ -12,6 +12,7 @@ import type { SupabaseLogger } from "../shared/log.ts";
 import { buildAuthorizeUrl, generatePKCE, generateState } from "../shared/oauth.ts";
 import type { FetchLike, SupabaseTokenResponse } from "../shared/types.ts";
 import { HTML_SUCCESS, htmlError } from "./auth-html.ts";
+import type { SavedStateNotice } from "./store.ts";
 import { readSavedAuth, writeSavedAuth } from "./store.ts";
 import { NOT_CONNECTED_MESSAGE, disconnectSupabaseAuth, ensureSupabaseToolAuth } from "./tools.ts";
 
@@ -44,6 +45,7 @@ type SupabaseStatusInstructions =
   | {
       status: "disconnected";
       checked: false;
+      notice?: SavedStateNotice;
     }
   | {
       status: "refresh_required";
@@ -63,10 +65,14 @@ function encodeStatusInstructions(status: SupabaseStatusInstructions) {
   return JSON.stringify(status);
 }
 
-async function getStatusInstructions(input: Pick<SupabaseAuthInput, "directory" | "worktree">) {
-  const saved = await readSavedAuth(input);
+async function getStatusInstructions(input: Pick<SupabaseAuthInput, "directory" | "worktree">, deps: AuthDeps = {}) {
+  const saved = await readSavedAuth(input, { logger: deps.logger });
   if (!saved.auth) {
-    return encodeStatusInstructions({ status: "disconnected", checked: false });
+    return encodeStatusInstructions(
+      saved.notice
+        ? { status: "disconnected", checked: false, notice: saved.notice }
+        : { status: "disconnected", checked: false },
+    );
   }
 
   if (!isRefreshNeeded(saved.auth.expires)) {
@@ -360,7 +366,7 @@ export function createSupabaseAuth(
             };
           }
 
-          const instructions = await getStatusInstructions(input);
+          const instructions = await getStatusInstructions(input, deps);
           const status = JSON.parse(instructions) as SupabaseStatusInstructions;
 
           if (status.status !== "refresh_required") {
