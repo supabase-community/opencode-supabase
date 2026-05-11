@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { ToolContext } from "@opencode-ai/plugin/tool";
 
-import { readSavedAuth, writeSavedAuth } from "../src/server/store.ts";
+import { getStoreFile, readSavedAuth, writeSavedAuth } from "../src/server/store.ts";
 import {
   type SupabaseToolInput,
   createSupabaseTools,
@@ -48,6 +48,13 @@ async function createInput(): Promise<TestFixtures> {
   } satisfies TestPluginInput;
 
   return { hostAuthSet, input };
+}
+
+async function writeRawStore(input: TestPluginInput, contents: string) {
+  const path = getStoreFile(input);
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, contents);
+  return path;
 }
 
 function createContext(input: TestPluginInput): TestToolContext {
@@ -189,6 +196,36 @@ describe("server tools auth helper", () => {
         { fetch: mock(async () => new Response("unexpected")) },
       ),
     ).rejects.toThrow("Supabase is not connected. Run /supabase first.");
+  });
+
+  test("tool auth reports corrupt store recovery with backup path", async () => {
+    const { input } = await createInput();
+    await writeRawStore(input, "{ not json");
+    const backupPath = join(input.worktree, ".opencode", "supabase-auth.corrupt-2026-05-11T10-20-30-000Z.json");
+
+    await expect(
+      ensureSupabaseToolAuth(
+        input,
+        {
+          clientId: "plugin-client",
+          oauthPort: 17670,
+        },
+        {
+          fetch: mock(async () => new Response("unexpected")),
+          now: () => new Date("2026-05-11T10:20:30.000Z"),
+        },
+      ),
+    ).rejects.toThrow(
+      `Supabase auth was reset because the local auth store was corrupted.\n\nThe corrupted file was preserved here:\n${backupPath}\n\nRun /supabase to reconnect, then retry this tool.`,
+    );
+
+    await expect(readSavedAuth(input)).resolves.toMatchObject({
+      version: 1,
+      notice: {
+        type: "auth_store_reset",
+        backupPath,
+      },
+    });
   });
 
   test("updates host auth after a successful refresh", async () => {

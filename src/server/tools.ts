@@ -10,11 +10,19 @@ import {
 import { readSupabaseConfig } from "../shared/cfg.ts";
 import type { SupabaseLogger } from "../shared/log.ts";
 import type { FetchLike } from "../shared/types.ts";
-import { type SavedAuth, clearSavedAuth, getStoreFile, readSavedAuth, writeSavedAuth } from "./store.ts";
+import {
+  type SavedAuth,
+  type SavedStateNotice,
+  clearSavedAuth,
+  getStoreFile,
+  readSavedAuth,
+  writeSavedAuth,
+} from "./store.ts";
 
 type ToolDeps = {
   fetch?: FetchLike;
   logger?: SupabaseLogger;
+  now?: () => Date;
 };
 
 type InFlightRefresh = {
@@ -59,6 +67,7 @@ export type SupabaseAuthStatus =
   | {
       status: "disconnected";
       checked: boolean;
+      notice?: SavedStateNotice;
     }
   | {
       status: "unknown";
@@ -69,6 +78,10 @@ export type SupabaseAuthStatus =
 export const NOT_CONNECTED_MESSAGE = "Supabase is not connected. Run /supabase first.";
 const REFRESH_BUFFER_MS = 30_000;
 const inFlightRefreshes = new Map<string, InFlightRefresh>();
+
+function formatAuthNoticeForTool(notice: SavedStateNotice) {
+  return `${notice.message.replace(". Reconnect to continue.", ".")}\n\nThe corrupted file was preserved here:\n${notice.backupPath}\n\nRun /supabase to reconnect, then retry this tool.`;
+}
 
 function isRefreshNeeded(auth: SavedAuth) {
   return auth.expires <= Date.now() + REFRESH_BUFFER_MS;
@@ -236,9 +249,11 @@ export async function getSupabaseAuthStatus(
   options?: PluginOptions,
   deps: ToolDeps = {},
 ): Promise<SupabaseAuthStatus> {
-  const saved = await readSavedAuth(input);
+  const saved = await readSavedAuth(input, { logger: deps.logger, now: deps.now });
   if (!saved.auth) {
-    return { status: "disconnected", checked: false };
+    return saved.notice
+      ? { status: "disconnected", checked: false, notice: saved.notice }
+      : { status: "disconnected", checked: false };
   }
 
   if (!isRefreshNeeded(saved.auth)) {
@@ -249,6 +264,11 @@ export async function getSupabaseAuthStatus(
     const auth = await ensureSupabaseToolAuth(input, options, deps);
     return { status: "connected", auth, checked: true };
   } catch (error) {
+    const latest = await readSavedAuth(input, { logger: deps.logger, now: deps.now });
+    if (!latest.auth && latest.notice) {
+      return { status: "disconnected", checked: true, notice: latest.notice };
+    }
+
     const message = error instanceof Error ? error.message : String(error);
     if (message === NOT_CONNECTED_MESSAGE) {
       return { status: "disconnected", checked: true };
@@ -264,9 +284,9 @@ export async function ensureSupabaseToolAuth(
   deps: ToolDeps = {},
 ): Promise<SavedAuth> {
   const refreshKey = getStoreFile(input);
-  const saved = await readSavedAuth(input);
+  const saved = await readSavedAuth(input, { logger: deps.logger, now: deps.now });
   if (!saved.auth) {
-    throw new Error(NOT_CONNECTED_MESSAGE);
+    throw new Error(saved.notice ? formatAuthNoticeForTool(saved.notice) : NOT_CONNECTED_MESSAGE);
   }
 
   const inFlight = inFlightRefreshes.get(refreshKey);
@@ -300,9 +320,9 @@ export async function ensureSupabaseToolAuth(
   };
   const refreshPromise = (async () => {
     const fetchImpl = deps.fetch ?? fetch;
-    const current = await readSavedAuth(input);
+    const current = await readSavedAuth(input, { logger: deps.logger, now: deps.now });
     if (!current.auth) {
-      throw new Error(NOT_CONNECTED_MESSAGE);
+      throw new Error(current.notice ? formatAuthNoticeForTool(current.notice) : NOT_CONNECTED_MESSAGE);
     }
 
     if (!isRefreshNeeded(current.auth)) {
@@ -325,9 +345,9 @@ export async function ensureSupabaseToolAuth(
         expires: Date.now() + (refreshed.expires_in ?? 3600) * 1000,
       };
 
-      const latest = await readSavedAuth(input);
+      const latest = await readSavedAuth(input, { logger: deps.logger, now: deps.now });
       if (!latest.auth) {
-        throw new Error(NOT_CONNECTED_MESSAGE);
+        throw new Error(latest.notice ? formatAuthNoticeForTool(latest.notice) : NOT_CONNECTED_MESSAGE);
       }
 
       if (!isSameAuth(latest.auth, current.auth)) {
@@ -338,12 +358,12 @@ export async function ensureSupabaseToolAuth(
       return nextAuth;
     } catch (error) {
       if (error instanceof BrokerClientError) {
-        const latest = await readSavedAuth(input);
+        const latest = await readSavedAuth(input, { logger: deps.logger, now: deps.now });
         if (!isSameAuth(latest.auth, current.auth)) {
           if (latest.auth) {
             return latest.auth;
           }
-          throw new Error(NOT_CONNECTED_MESSAGE);
+          throw new Error(latest.notice ? formatAuthNoticeForTool(latest.notice) : NOT_CONNECTED_MESSAGE);
         }
 
         if (error.code === "unauthorized") {
