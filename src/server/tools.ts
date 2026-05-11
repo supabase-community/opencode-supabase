@@ -337,7 +337,7 @@ export async function ensureSupabaseToolAuth(
       await writeSavedAuth(input, nextAuth);
       return nextAuth;
     } catch (error) {
-      if (error instanceof BrokerClientError && (error.status === 401 || error.status === 400)) {
+      if (error instanceof BrokerClientError) {
         const latest = await readSavedAuth(input);
         if (!isSameAuth(latest.auth, current.auth)) {
           if (latest.auth) {
@@ -346,14 +346,14 @@ export async function ensureSupabaseToolAuth(
           throw new Error(NOT_CONNECTED_MESSAGE);
         }
 
-        await clearSavedAuth(input);
-        try {
-          await clearHostAuth(input, fetchImpl);
-        } catch {}
-        throw new Error(NOT_CONNECTED_MESSAGE);
-      }
+        if (error.code === "unauthorized") {
+          await clearSavedAuth(input);
+          try {
+            await clearHostAuth(input, fetchImpl);
+          } catch {}
+          throw new Error(NOT_CONNECTED_MESSAGE);
+        }
 
-      if (error instanceof BrokerClientError) {
         throw new Error(`Supabase auth refresh failed: ${error.message}`);
       }
       throw error;
@@ -366,7 +366,7 @@ export async function ensureSupabaseToolAuth(
     })
     .finally(() => {
       if (inFlightRefreshes.get(refreshKey)?.promise === refreshEntry.promise) {
-      inFlightRefreshes.delete(refreshKey);
+        inFlightRefreshes.delete(refreshKey);
       }
     });
 
