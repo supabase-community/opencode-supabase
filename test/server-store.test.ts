@@ -68,6 +68,41 @@ describe("server auth store", () => {
     expect(warn).toHaveBeenCalledTimes(1);
   });
 
+  test("concurrent corrupt-store reads share one recovery", async () => {
+    const input = await createInput();
+    const path = await writeRawStore(input, "{ not json");
+    const warn = mock(async () => undefined);
+    const backupPath = join(
+      input.worktree,
+      ".opencode",
+      "supabase-auth.corrupt-2026-05-11T10-20-30-000Z.json",
+    );
+    const deps = {
+      now: () => new Date("2026-05-11T10:20:30.000Z"),
+      logger: { warn },
+    };
+
+    const [a, b] = await Promise.all([
+      readSavedAuth(input, deps),
+      readSavedAuth(input, deps),
+    ]);
+
+    const expected = {
+      version: 1,
+      notice: {
+        type: "auth_store_reset",
+        message: "Supabase auth was reset because the local auth store was corrupted. Reconnect to continue.",
+        backupPath,
+      },
+    };
+    expect(a).toEqual(expected);
+    expect(b).toEqual(expected);
+
+    await expect(readFile(path, "utf8")).resolves.toContain("auth_store_reset");
+    await expect(readFile(backupPath, "utf8")).resolves.toBe("{ not json");
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
   test("backs up an unsupported store version and resets the auth store", async () => {
     const input = await createInput();
     await writeRawStore(input, JSON.stringify({ version: 2, auth: { access: "a", refresh: "r", expires: 1 } }));

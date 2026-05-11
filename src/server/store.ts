@@ -31,6 +31,7 @@ export type SavedState = {
 
 const STORE_FILE = "supabase-auth.json";
 const AUTH_STORE_RESET_MESSAGE = "Supabase auth was reset because the local auth store was corrupted. Reconnect to continue.";
+const inFlightRecoveries = new Map<string, Promise<SavedState>>();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -114,27 +115,39 @@ async function writeState(path: string, state: SavedState): Promise<void> {
   await Bun.write(path, JSON.stringify(state, null, 2));
 }
 
-async function recoverCorruptStore(path: string, error: unknown, deps: StoreDeps): Promise<SavedState> {
-  const backupPath = backupFile(path, deps.now ?? (() => new Date()));
-  const state: SavedState = {
-    version: 1,
-    notice: {
-      type: "auth_store_reset",
-      message: AUTH_STORE_RESET_MESSAGE,
-      backupPath,
-    },
-  };
+async function recoverCorruptStoreOnce(path: string, error: unknown, deps: StoreDeps): Promise<SavedState> {
+  const existing = inFlightRecoveries.get(path);
+  if (existing) return existing;
 
-  await mkdir(dirname(path), { recursive: true });
-  await rename(path, backupPath);
-  await writeState(path, state);
-  await deps.logger?.warn("supabase auth store reset", {
-    reason: error instanceof Error ? error.message : String(error),
-    path,
-    backupPath,
-  });
+  const recovery = (async () => {
+    try {
+      const backupPath = backupFile(path, deps.now ?? (() => new Date()));
+      const state: SavedState = {
+        version: 1,
+        notice: {
+          type: "auth_store_reset",
+          message: AUTH_STORE_RESET_MESSAGE,
+          backupPath,
+        },
+      };
 
-  return state;
+      await mkdir(dirname(path), { recursive: true });
+      await rename(path, backupPath);
+      await writeState(path, state);
+      await deps.logger?.warn("supabase auth store reset", {
+        reason: error instanceof Error ? error.message : String(error),
+        path,
+        backupPath,
+      });
+
+      return state;
+    } finally {
+      inFlightRecoveries.delete(path);
+    }
+  })();
+
+  inFlightRecoveries.set(path, recovery);
+  return recovery;
 }
 
 // Use worktree only when it is non-root and directory is equal to or inside it;
@@ -176,7 +189,7 @@ export async function read(input: StoreInput, deps: StoreDeps = {}): Promise<Sav
   try {
     return normalizeState(JSON.parse(await authFile.text()));
   } catch (error) {
-    return recoverCorruptStore(path, error, deps);
+    return recoverCorruptStoreOnce(path, error, deps);
   }
 }
 
