@@ -1,4 +1,4 @@
-import { mkdir, rename } from "node:fs/promises";
+import { mkdir, open, rename, unlink } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import type { PluginInput } from "@opencode-ai/plugin";
 
@@ -31,6 +31,9 @@ export type SavedState = {
 
 const STORE_FILE = "supabase-auth.json";
 const AUTH_STORE_RESET_MESSAGE = "Supabase auth was reset because the local auth store was corrupted. Reconnect to continue.";
+const RECOVERY_LOCK_SUFFIX = ".recovering.lock";
+const RECOVERY_MAX_WAIT_MS = 5000;
+const RECOVERY_POLL_MS = 50;
 const inFlightRecoveries = new Map<string, Promise<SavedState>>();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -105,9 +108,15 @@ function normalizeState(value: unknown): SavedState {
   };
 }
 
-function backupFile(path: string, now: () => Date) {
+async function backupFile(path: string, now: () => Date) {
   const timestamp = now().toISOString().replace(/[:.]/g, "-");
-  return join(dirname(path), `supabase-auth.corrupt-${timestamp}.json`);
+  let candidate = join(dirname(path), `supabase-auth.corrupt-${timestamp}.json`);
+  let counter = 1;
+  while (await Bun.file(candidate).exists()) {
+    candidate = join(dirname(path), `supabase-auth.corrupt-${timestamp}-${counter}.json`);
+    counter++;
+  }
+  return candidate;
 }
 
 async function writeState(path: string, state: SavedState): Promise<void> {
@@ -115,13 +124,63 @@ async function writeState(path: string, state: SavedState): Promise<void> {
   await Bun.write(path, JSON.stringify(state, null, 2));
 }
 
+async function acquireRecoveryLock(lockPath: string): Promise<import("node:fs/promises").FileHandle | undefined> {
+  try {
+    const fd = await open(lockPath, "wx");
+    return fd;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
+async function releaseRecoveryLock(fd: import("node:fs/promises").FileHandle, lockPath: string): Promise<void> {
+  try {
+    await fd.close();
+  } catch {}
+  try {
+    await unlink(lockPath);
+  } catch {}
+}
+
+async function waitForRecoveredState(path: string, deps: StoreDeps): Promise<SavedState> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < RECOVERY_MAX_WAIT_MS) {
+    try {
+      const text = await Bun.file(path).text();
+      return normalizeState(JSON.parse(text));
+    } catch {
+      // not ready yet
+    }
+    await new Promise((resolve) => setTimeout(resolve, RECOVERY_POLL_MS));
+  }
+  throw new Error("Supabase auth store recovery timed out waiting for another process");
+}
+
 async function recoverCorruptStoreOnce(path: string, error: unknown, deps: StoreDeps): Promise<SavedState> {
   const existing = inFlightRecoveries.get(path);
   if (existing) return existing;
 
   const recovery = (async () => {
+    const lockPath = path + RECOVERY_LOCK_SUFFIX;
+    const lock = await acquireRecoveryLock(lockPath);
+    if (!lock) {
+      return waitForRecoveredState(path, deps);
+    }
+
     try {
-      const backupPath = backupFile(path, deps.now ?? (() => new Date()));
+      // Re-read under lock in case another process already fixed it.
+      try {
+        const text = await Bun.file(path).text();
+        const state = normalizeState(JSON.parse(text));
+        return state;
+      } catch {
+        // still corrupt or missing
+      }
+
+      const backupPath = await backupFile(path, deps.now ?? (() => new Date()));
       const state: SavedState = {
         version: 1,
         notice: {
@@ -142,6 +201,7 @@ async function recoverCorruptStoreOnce(path: string, error: unknown, deps: Store
 
       return state;
     } finally {
+      await releaseRecoveryLock(lock, lockPath);
       inFlightRecoveries.delete(path);
     }
   })();
