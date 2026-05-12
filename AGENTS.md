@@ -17,6 +17,15 @@ For Supabase Management API work, prefer the markdownized docs:
 
 Use this reference when implementing or reviewing authenticated Supabase API tools.
 
+## Test Commands
+
+Never run raw `bun test` for repository verification. Always use package scripts so required preloads run.
+
+- Use `bun run test` for all test suites.
+- Use `bun run test <test-file>` for focused tests.
+- Do not use `bun test <test-file>` directly. It skips `@opentui/solid/preload` and can produce false `jsxDEV` / `jsx-runtime.d.ts` failures for TUI/TSX tests.
+- When comparing with CI, mirror `.github/workflows/ci.yml`: `bun run lint`, `bun run typecheck`, `bun run test`, `bun run verify:pack`.
+
 ## Bundled Supabase Skills
 
 `skills/` contains real vendored files synced from `supabase/agent-skills` at a pinned commit.
