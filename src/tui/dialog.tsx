@@ -220,6 +220,28 @@ function noticeMessage(notice: AuthNotice) {
   return `The local Supabase auth file was corrupted, so auth was reset.\n\nThe corrupted file was preserved here:\n${notice.backupPath}\n\nReconnect to continue.`;
 }
 
+async function checkNoticeAfterCallback(context: Pick<AuthFlowContext, "api" | "setState">): Promise<boolean> {
+  try {
+    const authResponse = (await context.api.client.provider.oauth.authorize({
+      providerID: "supabase",
+      method: 1,
+    })) as ApiResponse<AuthData>;
+
+    if (authResponse.error || !authResponse.data?.instructions) {
+      return false;
+    }
+
+    const status = parseAuthStatus(authResponse.data.instructions);
+    if (status.status === "disconnected" && status.notice) {
+      context.setState({ type: "notice", notice: status.notice });
+      return true;
+    }
+  } catch {
+    // ignore secondary errors
+  }
+  return false;
+}
+
 async function openBrowser(url: string, logger: SupabaseLogger) {
   try {
     const open = await import("open");
@@ -416,6 +438,7 @@ export async function runAuthPreflight(context: Pick<AuthFlowContext, "api" | "l
     })) as ApiResponse<boolean>;
 
     if (callbackResponse.error) {
+      if (await checkNoticeAfterCallback(context)) return;
       throw new Error(formatAuthError("callback", callbackResponse.error));
     }
 
@@ -424,8 +447,10 @@ export async function runAuthPreflight(context: Pick<AuthFlowContext, "api" | "l
       return;
     }
 
+    if (await checkNoticeAfterCallback(context)) return;
     context.setState({ type: "idle" });
   } catch (error) {
+    if (await checkNoticeAfterCallback(context)) return;
     context.setState({
       type: "unknown",
       message: formatAuthError("unknown", error),

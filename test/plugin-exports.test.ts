@@ -814,6 +814,157 @@ test("supabase auth preflight shows unknown state when refresh verification fail
   ]);
 });
 
+test("supabase auth preflight surfaces notice after refresh callback error", async () => {
+  const states: Array<Record<string, unknown>> = [];
+  const notice = {
+    type: "auth_store_reset",
+    message: "Supabase auth was reset because the local auth store was corrupted. Reconnect to continue.",
+    backupPath: "/tmp/project/.opencode/supabase-auth.corrupt-2026-05-11T10-20-30-000Z.json",
+  };
+  let authorizeCalls = 0;
+  const api = createDialogApi({
+    client: {
+      app: {
+        log: (_input: unknown) => Promise.resolve(true),
+      },
+      tui: {
+        clearPrompt: () => Promise.resolve({ data: true }),
+        appendPrompt: (_input: unknown) => Promise.resolve({ data: true }),
+        submitPrompt: () => Promise.resolve({ data: true }),
+      },
+      session: {
+        promptAsync: () => Promise.resolve({ data: true }),
+      },
+      provider: {
+        oauth: {
+          authorize: ({ method }: { method?: number }) => {
+            authorizeCalls += 1;
+            if (method === 1) {
+              if (authorizeCalls === 1) {
+                return Promise.resolve({
+                  data: {
+                    url: "https://supabase.com/",
+                    instructions: JSON.stringify({ status: "refresh_required", checked: true }),
+                    method: "auto",
+                  },
+                });
+              }
+              return Promise.resolve({
+                data: {
+                  url: "https://supabase.com/",
+                  instructions: JSON.stringify({ status: "disconnected", checked: false, notice }),
+                  method: "auto",
+                },
+              });
+            }
+            return Promise.resolve({ data: { url: "https://example.com/auth", instructions: "Test", method: "manual" } });
+          },
+          callback: ({ method }: { method?: number }) => {
+            if (method === 1) {
+              return Promise.resolve({
+                error: {
+                  data: {
+                    name: "UnknownError",
+                    data: {
+                      message: "Supabase auth refresh failed: broker unavailable",
+                    },
+                  },
+                  errors: [],
+                  success: false,
+                },
+              });
+            }
+            return Promise.resolve({ data: true });
+          },
+        },
+      },
+    },
+  });
+
+  await runAuthPreflight({
+    api: api as never,
+    logger: createLogger(),
+    setState: (state) => {
+      states.push(state as unknown as Record<string, unknown>);
+    },
+  });
+
+  expect(states).toEqual([
+    { type: "checking_auth" },
+    { type: "notice", notice },
+  ]);
+});
+
+test("supabase auth preflight surfaces notice after refresh callback false", async () => {
+  const states: Array<Record<string, unknown>> = [];
+  const notice = {
+    type: "auth_store_reset",
+    message: "Supabase auth was reset because the local auth store was corrupted. Reconnect to continue.",
+    backupPath: "/tmp/project/.opencode/supabase-auth.corrupt-2026-05-11T10-20-30-000Z.json",
+  };
+  let authorizeCalls = 0;
+  const api = createDialogApi({
+    client: {
+      app: {
+        log: (_input: unknown) => Promise.resolve(true),
+      },
+      tui: {
+        clearPrompt: () => Promise.resolve({ data: true }),
+        appendPrompt: (_input: unknown) => Promise.resolve({ data: true }),
+        submitPrompt: () => Promise.resolve({ data: true }),
+      },
+      session: {
+        promptAsync: () => Promise.resolve({ data: true }),
+      },
+      provider: {
+        oauth: {
+          authorize: ({ method }: { method?: number }) => {
+            authorizeCalls += 1;
+            if (method === 1) {
+              if (authorizeCalls === 1) {
+                return Promise.resolve({
+                  data: {
+                    url: "https://supabase.com/",
+                    instructions: JSON.stringify({ status: "refresh_required", checked: true }),
+                    method: "auto",
+                  },
+                });
+              }
+              return Promise.resolve({
+                data: {
+                  url: "https://supabase.com/",
+                  instructions: JSON.stringify({ status: "disconnected", checked: false, notice }),
+                  method: "auto",
+                },
+              });
+            }
+            return Promise.resolve({ data: { url: "https://example.com/auth", instructions: "Test", method: "manual" } });
+          },
+          callback: ({ method }: { method?: number }) => {
+            if (method === 1) {
+              return Promise.resolve({ data: false });
+            }
+            return Promise.resolve({ data: true });
+          },
+        },
+      },
+    },
+  });
+
+  await runAuthPreflight({
+    api: api as never,
+    logger: createLogger(),
+    setState: (state) => {
+      states.push(state as unknown as Record<string, unknown>);
+    },
+  });
+
+  expect(states).toEqual([
+    { type: "checking_auth" },
+    { type: "notice", notice },
+  ]);
+});
+
 test("supabase dialog already connected offers disconnect action", async () => {
   const authorizeCalls: Array<{ providerID?: string; method?: number; inputs?: Record<string, string> }> = [];
   const api = createDialogApi({

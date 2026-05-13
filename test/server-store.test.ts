@@ -227,7 +227,8 @@ describe("server auth store", () => {
     const path = await writeRawStore(input, "{ not json");
     const lockPath = `${path}.recovering.lock`;
     await mkdir(dirname(lockPath), { recursive: true });
-    await writeFile(lockPath, "");
+    // Write a lock with recent startedAt to simulate an active process
+    await writeFile(lockPath, JSON.stringify({ startedAt: Date.now() }));
 
     const readPromise = readSavedAuth(input, {
       now: () => new Date("2026-05-11T10:20:30.000Z"),
@@ -248,6 +249,94 @@ describe("server auth store", () => {
     await rm(lockPath, { force: true });
 
     await expect(readPromise).resolves.toEqual(recoveredState);
+  });
+
+  test("recovers again after waiting-on-lock read completes", async () => {
+    const input = await createInput();
+    const path = await writeRawStore(input, "{ not json");
+    const lockPath = `${path}.recovering.lock`;
+    await mkdir(dirname(lockPath), { recursive: true });
+    await writeFile(lockPath, JSON.stringify({ startedAt: Date.now() }));
+
+    const readPromise = readSavedAuth(input, {
+      now: () => new Date("2026-05-11T10:20:30.000Z"),
+    });
+
+    // simulate another process finishing recovery
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const backupPath = join(
+      input.worktree,
+      ".opencode",
+      "supabase-auth.corrupt-2026-05-11T10-20-30-000Z.json",
+    );
+    const recoveredState: SavedState = {
+      version: 1,
+      notice: {
+        type: "auth_store_reset",
+        message: "Supabase auth was reset because the local auth store was corrupted. Reconnect to continue.",
+        backupPath,
+      },
+    };
+    await writeFile(path, JSON.stringify(recoveredState));
+    await rm(lockPath, { force: true });
+
+    await expect(readPromise).resolves.toEqual(recoveredState);
+
+    // corrupt again and recover a second time to prove inFlightRecoveries was cleaned up
+    await writeRawStore(input, "also not json");
+    const secondBackupPath = join(
+      input.worktree,
+      ".opencode",
+      "supabase-auth.corrupt-2026-05-11T10-20-31-000Z.json",
+    );
+
+    const secondState = await readSavedAuth(input, {
+      now: () => new Date("2026-05-11T10:20:31.000Z"),
+    });
+
+    expect(secondState).toEqual({
+      version: 1,
+      notice: {
+        type: "auth_store_reset",
+        message: "Supabase auth was reset because the local auth store was corrupted. Reconnect to continue.",
+        backupPath: secondBackupPath,
+      },
+    });
+
+    await expect(readFile(secondBackupPath, "utf8")).resolves.toBe("also not json");
+  });
+
+  test("takes over a stale recovery lock and performs recovery", async () => {
+    const input = await createInput();
+    const path = await writeRawStore(input, "{ not json");
+    const lockPath = `${path}.recovering.lock`;
+    await mkdir(dirname(lockPath), { recursive: true });
+    // Write a stale lock (startedAt far in the past relative to real wall clock)
+    const staleStartedAt = Date.now() - 20_000;
+    await writeFile(lockPath, JSON.stringify({ startedAt: staleStartedAt, token: "stale-owner" }));
+
+    const backupPath = join(
+      input.worktree,
+      ".opencode",
+      "supabase-auth.corrupt-2026-05-11T10-20-30-000Z.json",
+    );
+
+    const state = await readSavedAuth(input, {
+      now: () => new Date("2026-05-11T10:20:30.000Z"),
+    });
+
+    expect(state).toEqual({
+      version: 1,
+      notice: {
+        type: "auth_store_reset",
+        message: "Supabase auth was reset because the local auth store was corrupted. Reconnect to continue.",
+        backupPath,
+      },
+    });
+
+    await expect(readFile(path, "utf8")).resolves.toContain("auth_store_reset");
+    await expect(readFile(backupPath, "utf8")).resolves.toBe("{ not json");
+    await expect(Bun.file(lockPath).exists()).resolves.toBe(false);
   });
 
   test("stores auth in a plugin-owned file under the worktree .opencode directory", async () => {

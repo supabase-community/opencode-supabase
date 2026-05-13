@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdir, open, rename, unlink } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import type { PluginInput } from "@opencode-ai/plugin";
@@ -34,7 +35,33 @@ const AUTH_STORE_RESET_MESSAGE = "Supabase auth was reset because the local auth
 const RECOVERY_LOCK_SUFFIX = ".recovering.lock";
 const RECOVERY_MAX_WAIT_MS = 5000;
 const RECOVERY_POLL_MS = 50;
+const RECOVERY_LOCK_STALE_MS = 10_000;
 const inFlightRecoveries = new Map<string, Promise<SavedState>>();
+
+type RecoveryLockMetadata = {
+  startedAt?: number;
+  token?: string;
+};
+
+type RecoveryLock = {
+  fd: import("node:fs/promises").FileHandle;
+  token: string;
+};
+
+async function readLockMetadata(lockPath: string): Promise<RecoveryLockMetadata> {
+  try {
+    const text = await Bun.file(lockPath).text();
+    return JSON.parse(text) as { startedAt?: number };
+  } catch {
+    return {};
+  }
+}
+
+async function isStaleLock(lockPath: string): Promise<boolean> {
+  const metadata = await readLockMetadata(lockPath);
+  if (!metadata.startedAt) return true;
+  return Date.now() - metadata.startedAt > RECOVERY_LOCK_STALE_MS;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -124,24 +151,47 @@ async function writeState(path: string, state: SavedState): Promise<void> {
   await Bun.write(path, JSON.stringify(state, null, 2));
 }
 
-async function acquireRecoveryLock(lockPath: string): Promise<import("node:fs/promises").FileHandle | undefined> {
-  try {
-    const fd = await open(lockPath, "wx");
-    return fd;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
-      return undefined;
+async function acquireRecoveryLock(lockPath: string): Promise<RecoveryLock | undefined> {
+  async function tryCreate(): Promise<RecoveryLock | undefined> {
+    try {
+      const fd = await open(lockPath, "wx");
+      const token = randomUUID();
+      const metadata = JSON.stringify({ startedAt: Date.now(), token });
+      await fd.write(metadata, 0, "utf8");
+      return { fd, token };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+        return undefined;
+      }
+      throw error;
     }
-    throw error;
   }
+
+  const lock = await tryCreate();
+  if (lock) return lock;
+
+  // Lock exists; check if stale and take over if so.
+  if (await isStaleLock(lockPath)) {
+    try {
+      await unlink(lockPath);
+    } catch {
+      // Another process may have already removed it.
+    }
+    return tryCreate();
+  }
+
+  return undefined;
 }
 
-async function releaseRecoveryLock(fd: import("node:fs/promises").FileHandle, lockPath: string): Promise<void> {
+async function releaseRecoveryLock(lock: RecoveryLock, lockPath: string): Promise<void> {
   try {
-    await fd.close();
+    await lock.fd.close();
   } catch {}
   try {
-    await unlink(lockPath);
+    const metadata = await readLockMetadata(lockPath);
+    if (metadata.token === lock.token) {
+      await unlink(lockPath);
+    }
   } catch {}
 }
 
@@ -191,7 +241,16 @@ async function recoverCorruptStoreOnce(path: string, error: unknown, deps: Store
       };
 
       await mkdir(dirname(path), { recursive: true });
-      await rename(path, backupPath);
+      try {
+        await rename(path, backupPath);
+      } catch (renameError) {
+        if ((renameError as NodeJS.ErrnoException).code === "ENOENT") {
+          // Store disappeared before we could back it up; write clean state directly.
+          await writeState(path, { version: 1 });
+          return { version: 1 } as SavedState;
+        }
+        throw renameError;
+      }
       await writeState(path, state);
       await deps.logger?.warn("supabase auth store reset", {
         reason: error instanceof Error ? error.message : String(error),
@@ -202,9 +261,10 @@ async function recoverCorruptStoreOnce(path: string, error: unknown, deps: Store
       return state;
     } finally {
       await releaseRecoveryLock(lock, lockPath);
-      inFlightRecoveries.delete(path);
     }
-  })();
+  })().finally(() => {
+    inFlightRecoveries.delete(path);
+  });
 
   inFlightRecoveries.set(path, recovery);
   return recovery;

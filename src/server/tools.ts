@@ -83,6 +83,14 @@ function formatAuthNoticeForTool(notice: SavedStateNotice) {
   return `${notice.message.replace(". Reconnect to continue.", ".")}\n\nThe corrupted file was preserved here:\n${notice.backupPath}\n\nRun /supabase to reconnect, then retry this tool.`;
 }
 
+async function throwAuthNotice(input: SupabaseToolInput, notice: SavedStateNotice, deps: ToolDeps): Promise<never> {
+  const fetchImpl = deps.fetch ?? fetch;
+  try {
+    await clearHostAuth(input, fetchImpl);
+  } catch {}
+  throw new Error(formatAuthNoticeForTool(notice));
+}
+
 function isRefreshNeeded(auth: SavedAuth) {
   return auth.expires <= Date.now() + REFRESH_BUFFER_MS;
 }
@@ -286,7 +294,10 @@ export async function ensureSupabaseToolAuth(
   const refreshKey = getStoreFile(input);
   const saved = await readSavedAuth(input, { logger: deps.logger, now: deps.now });
   if (!saved.auth) {
-    throw new Error(saved.notice ? formatAuthNoticeForTool(saved.notice) : NOT_CONNECTED_MESSAGE);
+    if (saved.notice) {
+      await throwAuthNotice(input, saved.notice, deps);
+    }
+    throw new Error(NOT_CONNECTED_MESSAGE);
   }
 
   const inFlight = inFlightRefreshes.get(refreshKey);
@@ -322,7 +333,10 @@ export async function ensureSupabaseToolAuth(
     const fetchImpl = deps.fetch ?? fetch;
     const current = await readSavedAuth(input, { logger: deps.logger, now: deps.now });
     if (!current.auth) {
-      throw new Error(current.notice ? formatAuthNoticeForTool(current.notice) : NOT_CONNECTED_MESSAGE);
+      if (current.notice) {
+        await throwAuthNotice(input, current.notice, deps);
+      }
+      throw new Error(NOT_CONNECTED_MESSAGE);
     }
 
     if (!isRefreshNeeded(current.auth)) {
@@ -347,7 +361,10 @@ export async function ensureSupabaseToolAuth(
 
       const latest = await readSavedAuth(input, { logger: deps.logger, now: deps.now });
       if (!latest.auth) {
-        throw new Error(latest.notice ? formatAuthNoticeForTool(latest.notice) : NOT_CONNECTED_MESSAGE);
+        if (latest.notice) {
+          await throwAuthNotice(input, latest.notice, deps);
+        }
+        throw new Error(NOT_CONNECTED_MESSAGE);
       }
 
       if (!isSameAuth(latest.auth, current.auth)) {
@@ -363,7 +380,10 @@ export async function ensureSupabaseToolAuth(
           if (latest.auth) {
             return latest.auth;
           }
-          throw new Error(latest.notice ? formatAuthNoticeForTool(latest.notice) : NOT_CONNECTED_MESSAGE);
+          if (latest.notice) {
+            await throwAuthNotice(input, latest.notice, deps);
+          }
+          throw new Error(NOT_CONNECTED_MESSAGE);
         }
 
         if (error.code === "unauthorized") {
