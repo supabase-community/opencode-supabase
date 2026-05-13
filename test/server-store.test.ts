@@ -339,6 +339,36 @@ describe("server auth store", () => {
     await expect(Bun.file(lockPath).exists()).resolves.toBe(false);
   });
 
+  test("takes over a malformed recovery lock and performs recovery", async () => {
+    const input = await createInput();
+    const path = await writeRawStore(input, "{ not json");
+    const lockPath = `${path}.recovering.lock`;
+    await mkdir(dirname(lockPath), { recursive: true });
+    await writeFile(lockPath, JSON.stringify({ startedAt: "not-a-number", token: "bad-owner" }));
+
+    const backupPath = join(
+      input.worktree,
+      ".opencode",
+      "supabase-auth.corrupt-2026-05-11T10-20-30-000Z.json",
+    );
+
+    const state = await readSavedAuth(input, {
+      now: () => new Date("2026-05-11T10:20:30.000Z"),
+    });
+
+    expect(state).toEqual({
+      version: 1,
+      notice: {
+        type: "auth_store_reset",
+        message: "Supabase auth was reset because the local auth store was corrupted. Reconnect to continue.",
+        backupPath,
+      },
+    });
+
+    await expect(readFile(backupPath, "utf8")).resolves.toBe("{ not json");
+    await expect(Bun.file(lockPath).exists()).resolves.toBe(false);
+  });
+
   test("stores auth in a plugin-owned file under the worktree .opencode directory", async () => {
     const input = await createInput();
 

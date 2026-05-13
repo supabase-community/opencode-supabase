@@ -59,7 +59,7 @@ async function readLockMetadata(lockPath: string): Promise<RecoveryLockMetadata>
 
 async function isStaleLock(lockPath: string): Promise<boolean> {
   const metadata = await readLockMetadata(lockPath);
-  if (!metadata.startedAt) return true;
+  if (typeof metadata.startedAt !== "number" || !Number.isFinite(metadata.startedAt)) return true;
   return Date.now() - metadata.startedAt > RECOVERY_LOCK_STALE_MS;
 }
 

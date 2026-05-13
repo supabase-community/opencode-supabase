@@ -312,6 +312,13 @@ export async function ensureSupabaseToolAuth(
         try {
           await clearHostAuth(input, fetchImpl);
         } catch {}
+      } else {
+        const latest = await readSavedAuth(input, { logger: deps.logger, now: deps.now });
+        if (!latest.auth && latest.notice) {
+          try {
+            await clearHostAuth(input, fetchImpl);
+          } catch {}
+        }
       }
       throw error;
     }
