@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { ToolContext } from "@opencode-ai/plugin/tool";
 
-import { readSavedAuth, writeSavedAuth } from "../src/server/store.ts";
+import { getStoreFile, readSavedAuth, writeSavedAuth } from "../src/server/store.ts";
 import {
   type SupabaseToolInput,
   createSupabaseTools,
@@ -48,6 +48,13 @@ async function createInput(): Promise<TestFixtures> {
   } satisfies TestPluginInput;
 
   return { hostAuthSet, input };
+}
+
+async function writeRawStore(input: TestPluginInput, contents: string) {
+  const path = getStoreFile(input);
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, contents);
+  return path;
 }
 
 function createContext(input: TestPluginInput): TestToolContext {
@@ -189,6 +196,36 @@ describe("server tools auth helper", () => {
         { fetch: mock(async () => new Response("unexpected")) },
       ),
     ).rejects.toThrow("Supabase is not connected. Run /supabase first.");
+  });
+
+  test("tool auth reports corrupt store recovery with backup path", async () => {
+    const { input } = await createInput();
+    await writeRawStore(input, "{ not json");
+    const backupPath = join(input.worktree, ".opencode", "supabase-auth.corrupt-2026-05-11T10-20-30-000Z.json");
+
+    await expect(
+      ensureSupabaseToolAuth(
+        input,
+        {
+          clientId: "plugin-client",
+          oauthPort: 17670,
+        },
+        {
+          fetch: mock(async () => new Response("unexpected")),
+          now: () => new Date("2026-05-11T10:20:30.000Z"),
+        },
+      ),
+    ).rejects.toThrow(
+      `Supabase auth was reset because the local auth store was corrupted.\n\nThe corrupted file was preserved here:\n${backupPath}\n\nRun /supabase to reconnect, then retry this tool.`,
+    );
+
+    await expect(readSavedAuth(input)).resolves.toMatchObject({
+      version: 1,
+      notice: {
+        type: "auth_store_reset",
+        backupPath,
+      },
+    });
   });
 
   test("updates host auth after a successful refresh", async () => {
@@ -1018,6 +1055,105 @@ describe("server tools auth helper", () => {
         ),
       ]),
     ).rejects.toThrow("Supabase is not connected. Run /supabase first.");
+
+    expect(brokerRefreshCalls).toBe(1);
+    expect(hostClearCalls).toBe(2);
+  });
+
+  test("shared reset-notice refresh rejection clears host auth for each joined directory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "opencode-supabase-tools-"));
+    cleanupPaths.push(root);
+    const firstInput = {
+      client: {
+        auth: {
+          set: mock(async () => ({ data: true })),
+        },
+      },
+      directory: join(root, "consumer-a"),
+      worktree: root,
+      serverUrl: new URL("http://127.0.0.1:7777/"),
+    } satisfies TestPluginInput;
+    const secondInput = {
+      client: {
+        auth: {
+          set: mock(async () => ({ data: true })),
+        },
+      },
+      directory: join(root, "consumer-b"),
+      worktree: root,
+      serverUrl: new URL("http://127.0.0.1:7777/"),
+    } satisfies TestPluginInput;
+
+    process.env.OPENCODE_SUPABASE_BROKER_URL = "https://example.com/broker";
+    await writeSavedAuth(firstInput, {
+      access: "expired-access",
+      refresh: "saved-refresh",
+      expires: Date.now() - 1_000,
+    });
+
+    let brokerRefreshCalls = 0;
+    let hostClearCalls = 0;
+    const fetchMock: FetchLike = mock(async (request, init) => {
+      const url = String(request);
+      if (url === "https://example.com/broker/refresh") {
+        brokerRefreshCalls += 1;
+        await writeRawStore(firstInput, "{ not json");
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: "invalid_request",
+              message: "broker rejected malformed refresh request",
+            },
+          }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (url.startsWith("http://127.0.0.1:7777/auth/supabase?directory=")) {
+        expect(init?.method).toBe("DELETE");
+        hostClearCalls += 1;
+        return new Response(null, { status: 204 });
+      }
+
+      throw new Error(`Unexpected fetch ${url}`);
+    });
+
+    const results = await Promise.allSettled([
+      ensureSupabaseToolAuth(
+        firstInput,
+        {
+          clientId: "plugin-client",
+          oauthPort: 17686,
+        },
+        { fetch: fetchMock, now: () => new Date("2026-05-11T10:20:30.000Z") },
+      ),
+      ensureSupabaseToolAuth(
+        secondInput,
+        {
+          clientId: "plugin-client",
+          oauthPort: 17686,
+        },
+        { fetch: fetchMock, now: () => new Date("2026-05-11T10:20:30.000Z") },
+      ),
+    ]);
+
+    expect(results).toEqual([
+      expect.objectContaining({
+        reason: expect.objectContaining({
+          message: expect.stringContaining("Supabase auth was reset because the local auth store was corrupted."),
+        }),
+        status: "rejected",
+      }),
+      expect.objectContaining({
+        reason: expect.objectContaining({
+          message: expect.stringContaining("Supabase auth was reset because the local auth store was corrupted."),
+        }),
+        status: "rejected",
+      }),
+    ]);
 
     expect(brokerRefreshCalls).toBe(1);
     expect(hostClearCalls).toBe(2);

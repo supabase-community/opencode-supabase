@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { createSupabaseAuth, stopSupabaseAuthServer } from "../src/server/auth.ts";
-import { readSavedAuth, writeSavedAuth } from "../src/server/store.ts";
+import { readSavedAuth, writeSavedAuth, writeSavedAuthNotice } from "../src/server/store.ts";
 import { createSupabaseLogger } from "../src/shared/log.ts";
 import type { FetchLike } from "../src/shared/types.ts";
 
@@ -89,6 +89,29 @@ describe("server auth hook", () => {
     expect(JSON.parse(result.instructions)).toEqual({
       status: "disconnected",
       checked: false,
+    });
+  });
+
+  test("status method reports disconnected notice when auth store was reset", async () => {
+    const input = await createInput();
+    const backupPath = join(input.worktree, ".opencode", "supabase-auth.corrupt-2026-05-11T10-20-30-000Z.json");
+    await writeSavedAuthNotice(input as never, {
+      type: "auth_store_reset",
+      message: "Supabase auth was reset because the local auth store was corrupted. Reconnect to continue.",
+      backupPath,
+    });
+
+    const auth = createSupabaseAuth(input as never);
+    const result = await secondAuthMethod(auth).authorize();
+
+    expect(JSON.parse(result.instructions)).toEqual({
+      status: "disconnected",
+      checked: false,
+      notice: {
+        type: "auth_store_reset",
+        message: "Supabase auth was reset because the local auth store was corrupted. Reconnect to continue.",
+        backupPath,
+      },
     });
   });
 
