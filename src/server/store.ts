@@ -303,6 +303,10 @@ export async function read(input: StoreInput, deps: StoreDeps = {}): Promise<Sav
   const path = file(input);
   const authFile = Bun.file(path);
   if (!(await authFile.exists())) {
+    const lockPath = path + RECOVERY_LOCK_SUFFIX;
+    if ((await Bun.file(lockPath).exists()) && !(await isStaleLock(lockPath))) {
+      return waitForRecoveredState(path, deps);
+    }
     return { version: 1 };
   }
 

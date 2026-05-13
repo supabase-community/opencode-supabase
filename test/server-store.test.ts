@@ -251,6 +251,33 @@ describe("server auth store", () => {
     await expect(readPromise).resolves.toEqual(recoveredState);
   });
 
+  test("waits for another process when store is temporarily missing under recovery lock", async () => {
+    const input = await createInput();
+    const path = getStoreFile(input);
+    const lockPath = `${path}.recovering.lock`;
+    await mkdir(dirname(lockPath), { recursive: true });
+    await writeFile(lockPath, JSON.stringify({ startedAt: Date.now() }));
+
+    const readPromise = readSavedAuth(input, {
+      now: () => new Date("2026-05-11T10:20:30.000Z"),
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const backupPath = join(input.worktree, ".opencode", "supabase-auth.corrupt-2026-05-11T10-20-30-000Z.json");
+    const recoveredState: SavedState = {
+      version: 1,
+      notice: {
+        type: "auth_store_reset",
+        message: "Supabase auth was reset because the local auth store was corrupted. Reconnect to continue.",
+        backupPath,
+      },
+    };
+    await writeFile(path, JSON.stringify(recoveredState));
+    await rm(lockPath, { force: true });
+
+    await expect(readPromise).resolves.toEqual(recoveredState);
+  });
+
   test("recovers again after waiting-on-lock read completes", async () => {
     const input = await createInput();
     const path = await writeRawStore(input, "{ not json");
