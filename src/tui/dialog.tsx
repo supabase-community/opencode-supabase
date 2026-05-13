@@ -263,6 +263,7 @@ async function ensureChatSession(api: TuiPluginApi) {
     sessionID = (response.data as { id?: string } | undefined)?.id;
     if (sessionID) {
       api.route.navigate("session", { sessionID });
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
     }
   }
 

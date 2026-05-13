@@ -597,6 +597,76 @@ test("supabase disconnect does not inject onboarding", async () => {
   expect(api.__test.sessionOps).toEqual([]);
 });
 
+test("supabase already-connected confirm waits for route navigation before onboarding from home", async () => {
+  let currentRouteName = "home";
+  let promptAsyncCalls = 0;
+
+  const api = createDialogApi({
+    route: {
+      current: {
+        get name() {
+          return currentRouteName;
+        },
+      },
+      navigate: (name: string, params?: unknown) => {
+        api.__test.routeOps.push({ op: "navigate", name, params });
+        setTimeout(() => {
+          currentRouteName = name;
+        }, 0);
+      },
+    },
+    client: {
+      session: {
+        create: (input?: unknown) => {
+          api.__test.sessionOps.push({ op: "create", payload: input });
+          return Promise.resolve({ data: { id: "session-created" } });
+        },
+        promptAsync: (input: unknown) => {
+          promptAsyncCalls++;
+          if (currentRouteName !== "session") {
+            throw new Error("promptAsync rejected: session route not active");
+          }
+          api.__test.sessionOps.push({ op: "promptAsync", payload: input });
+          return Promise.resolve({ data: true });
+        },
+      },
+    },
+  });
+  const lifecycle = { closed: false };
+
+  const dialog = SupabaseDialog({
+    api: api as never,
+    logger: createLogger(),
+    onClose: () => api.ui.dialog.clear(),
+    initialState: { type: "already_connected" },
+    lifecycle,
+  }) as { onConfirm?: () => Promise<void> };
+
+  await dialog.onConfirm?.();
+
+  expect(promptAsyncCalls).toBeGreaterThan(0);
+  expect(api.__test.sessionOps).toEqual([
+    { op: "create", payload: {} },
+    {
+      op: "promptAsync",
+      payload: {
+        sessionID: "session-created",
+        noReply: true,
+        parts: [
+          {
+            type: "text",
+            ignored: true,
+            text: `Supabase is connected.\n\nYou can ask me about:\n- your organizations and projects\n- API keys for a project\n- available database regions\n- creating a new project\n\nTry this:\nlist my Supabase projects`,
+          },
+        ],
+      },
+    },
+  ]);
+  expect(api.__test.routeOps).toEqual([
+    { op: "navigate", name: "session", params: { sessionID: "session-created" } },
+  ]);
+});
+
 test("supabase auth preflight reports already connected when saved auth is still valid", async () => {
   const states: Array<Record<string, unknown>> = [];
   const api = createDialogApi({
