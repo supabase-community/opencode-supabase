@@ -656,7 +656,7 @@ test("supabase already-connected confirm waits for route navigation before onboa
           {
             type: "text",
             ignored: true,
-            text: `Supabase is connected.\n\nYou can ask me about:\n- your organizations and projects\n- API keys for a project\n- available database regions\n- creating a new project\n\nTry this:\nlist my Supabase projects`,
+            text: "Supabase is connected.\n\nYou can ask me about:\n- your organizations and projects\n- API keys for a project\n- available database regions\n- creating a new project\n\nTry this:\nlist my Supabase projects",
           },
         ],
       },
