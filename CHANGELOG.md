@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+### Patch Changes
+
+- 3a6ea04: Prevent ambiguous broker refresh errors from clearing saved Supabase auth.
+- 6fe8bd6: Recover corrupt Supabase auth store instead of crashing. Invalid or unsupported store files are backed up, reset to a valid notice state, and surfaced through the `/supabase` dialog and tool errors.
+
 ## 0.2.0
 
 ### Minor Changes
