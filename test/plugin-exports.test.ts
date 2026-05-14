@@ -107,6 +107,10 @@ function createDialogApi(overrides?: Record<string, unknown>) {
           sessionOps.push({ op: "create", payload: input });
           return Promise.resolve({ data: { id: "session-created" } });
         },
+        prompt: (input: unknown) => {
+          sessionOps.push({ op: "prompt", payload: input });
+          return Promise.resolve({ data: true });
+        },
         promptAsync: (input: unknown) => {
           sessionOps.push({ op: "promptAsync", payload: input });
           return Promise.resolve({ data: true });
@@ -362,7 +366,7 @@ test("supabase auth retry clears dismissed state", async () => {
 
   expect(lifecycle.dismissed).toBe(false);
   expect(api.__test.toasts).toEqual([]);
-  expect(api.__test.sessionOps.filter((op) => op.op === "promptAsync")).toHaveLength(1);
+  expect(api.__test.sessionOps.filter((op) => op.op === "prompt")).toHaveLength(1);
 });
 
 test("supabase dialog success closes without inserting an example prompt", async () => {
@@ -425,22 +429,20 @@ test("supabase auth success injects ignored onboarding into current session", as
   await dialog.onConfirm?.();
   await Promise.resolve();
 
-  expect(api.__test.sessionOps).toEqual([
-    {
-      op: "promptAsync",
-      payload: {
-        sessionID: "session-current",
-        noReply: true,
-        parts: [
-          expect.objectContaining({
-            type: "text",
-            ignored: true,
-            text: expect.stringContaining("your organizations and projects"),
-          }),
-        ],
-      },
-    },
-  ]);
+  expect(api.__test.sessionOps).toContainEqual(expect.objectContaining({
+    op: "prompt",
+    payload: expect.objectContaining({
+      sessionID: "session-current",
+      noReply: true,
+      parts: [
+        expect.objectContaining({
+          type: "text",
+          ignored: true,
+          text: expect.stringContaining("your organizations and projects"),
+        }),
+      ],
+    }),
+  }));
   expect(api.__test.promptOps).toEqual([]);
 });
 
@@ -462,9 +464,9 @@ test("supabase auth success creates a session from home before OAuth not after",
           api.__test.sessionOps.push({ op: "create", payload: input });
           return Promise.resolve({ data: { id: "session-created" } });
         },
-        promptAsync: (input: unknown) => {
-          ops.push("promptAsync");
-          api.__test.sessionOps.push({ op: "promptAsync", payload: input });
+        prompt: (input: unknown) => {
+          ops.push("prompt");
+          api.__test.sessionOps.push({ op: "prompt", payload: input });
           return Promise.resolve({ data: true });
         },
       },
@@ -507,7 +509,7 @@ test("supabase auth success creates a session from home before OAuth not after",
   ]);
 
   expect(api.__test.sessionOps).toContainEqual(expect.objectContaining({
-    op: "promptAsync",
+    op: "prompt",
     payload: expect.objectContaining({ sessionID: "session-created", noReply: true }),
   }));
 });
@@ -545,7 +547,7 @@ test("supabase already-connected confirm injects onboarding once", async () => {
 
   await secondDialog.onConfirm?.();
 
-  expect(api.__test.sessionOps.filter((op) => op.op === "promptAsync")).toHaveLength(1);
+  expect(api.__test.sessionOps.filter((op) => op.op === "prompt")).toHaveLength(1);
 });
 
 test("supabase already-connected confirm dedupes onboarding across dialog lifecycles", async () => {
@@ -579,7 +581,7 @@ test("supabase already-connected confirm dedupes onboarding across dialog lifecy
 
   await secondDialog.onConfirm?.();
 
-  expect(api.__test.sessionOps.filter((op) => op.op === "promptAsync")).toHaveLength(1);
+  expect(api.__test.sessionOps.filter((op) => op.op === "prompt")).toHaveLength(1);
 });
 
 test("supabase disconnect does not inject onboarding", async () => {
@@ -597,9 +599,10 @@ test("supabase disconnect does not inject onboarding", async () => {
   expect(api.__test.sessionOps).toEqual([]);
 });
 
-test("supabase already-connected confirm waits for route navigation before onboarding from home", async () => {
+test("supabase already-connected confirm saves onboarding before navigating from home", async () => {
   let currentRouteName = "home";
-  let promptAsyncCalls = 0;
+  let promptCalls = 0;
+  let promptResolved = false;
 
   const api = createDialogApi({
     route: {
@@ -621,13 +624,18 @@ test("supabase already-connected confirm waits for route navigation before onboa
           api.__test.sessionOps.push({ op: "create", payload: input });
           return Promise.resolve({ data: { id: "session-created" } });
         },
-        promptAsync: (input: unknown) => {
-          promptAsyncCalls++;
-          if (currentRouteName !== "session") {
-            throw new Error("promptAsync rejected: session route not active");
+        prompt: async (input: unknown) => {
+          promptCalls++;
+          if (currentRouteName !== "home") {
+            throw new Error("prompt rejected: route changed before onboarding was saved");
           }
-          api.__test.sessionOps.push({ op: "promptAsync", payload: input });
+          api.__test.sessionOps.push({ op: "prompt", payload: input });
+          await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          promptResolved = true;
           return Promise.resolve({ data: true });
+        },
+        promptAsync: () => {
+          throw new Error("onboarding should wait for prompt persistence");
         },
       },
     },
@@ -644,11 +652,12 @@ test("supabase already-connected confirm waits for route navigation before onboa
 
   await dialog.onConfirm?.();
 
-  expect(promptAsyncCalls).toBeGreaterThan(0);
+  expect(promptCalls).toBeGreaterThan(0);
+  expect(promptResolved).toBe(true);
   expect(api.__test.sessionOps).toEqual([
     { op: "create", payload: {} },
     {
-      op: "promptAsync",
+      op: "prompt",
       payload: {
         sessionID: "session-created",
         noReply: true,

@@ -253,7 +253,7 @@ async function openBrowser(url: string, logger: SupabaseLogger) {
   }
 }
 
-async function ensureChatSession(api: TuiPluginApi) {
+async function ensureChatSession(api: TuiPluginApi, navigate = true) {
   const currentRoute = api.route.current;
   let sessionID =
     currentRoute.name === "session" ? (currentRoute.params as { sessionID?: string } | undefined)?.sessionID : undefined;
@@ -261,7 +261,7 @@ async function ensureChatSession(api: TuiPluginApi) {
   if (!sessionID && currentRoute.name === "home") {
     const response = await api.client.session.create({});
     sessionID = (response.data as { id?: string } | undefined)?.id;
-    if (sessionID) {
+    if (sessionID && navigate) {
       api.route.navigate("session", { sessionID });
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
     }
@@ -299,7 +299,7 @@ async function injectOnboardingPrompt(
   onboardedSessionIDs.add(sessionID);
 
   try {
-    await api.client.session.promptAsync({
+    await api.client.session.prompt({
       sessionID,
       noReply: true,
       parts: [
@@ -651,10 +651,14 @@ export function SupabaseDialog(props: SupabaseDialogProps) {
       title: "You're all set",
       message: "Your Supabase account is connected and ready to go.\n\nClose this dialog to continue, or disconnect to sign out.",
       onConfirm: async () => {
+        const startedFromHome = props.api.route.current.name === "home";
         if (!lifecycle.chatSessionID) {
-          lifecycle.chatSessionID = await ensureChatSession(props.api);
+          lifecycle.chatSessionID = await ensureChatSession(props.api, false);
         }
         await injectOnboardingPrompt(props.api, props.logger, lifecycle);
+        if (startedFromHome && lifecycle.chatSessionID) {
+          props.api.route.navigate("session", { sessionID: lifecycle.chatSessionID });
+        }
         closeDialog();
       },
       onCancel: disconnect,
