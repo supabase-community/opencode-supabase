@@ -1,6 +1,7 @@
 import type { PluginOptions } from "@opencode-ai/plugin";
 import { tool } from "@opencode-ai/plugin";
 import type { ToolContext } from "@opencode-ai/plugin/tool";
+import open from "open";
 
 import { supabaseManagementApiFetch } from "../shared/api.ts";
 import {
@@ -23,6 +24,7 @@ type ToolDeps = {
   fetch?: FetchLike;
   logger?: SupabaseLogger;
   now?: () => Date;
+  open?: (target: string) => Promise<unknown>;
 };
 
 type InFlightRefresh = {
@@ -421,6 +423,26 @@ export async function ensureSupabaseToolAuth(
   return refreshEntry.promise;
 }
 
+function createMcpSetupUrl(projectRef: string) {
+  const url = new URL(`https://supabase.com/dashboard/project/${encodeURIComponent(projectRef)}`);
+  url.searchParams.set("showConnect", "true");
+  url.searchParams.set("connectTab", "mcp");
+  url.searchParams.set("mcpClient", "opencode");
+  return url.toString();
+}
+
+function formatMcpSetupResult(projectRef: string) {
+  return `Opened Supabase MCP setup for project ${projectRef} in Studio.
+
+On the Connect page:
+1. Confirm MCP tab and OpenCode client are selected.
+2. Choose the feature groups and permissions you want in Studio.
+3. Follow the OpenCode config and auth steps shown by Studio.
+4. If you want me to wire this into the current repo, paste the Studio prompt or OpenCode config snippet back here.
+5. You can skip any "install Supabase Agent Skills" step because this plugin already bundles them.
+6. Restart OpenCode after changing config; run \`opencode mcp auth supabase\` if OAuth is not prompted automatically.`;
+}
+
 export function createSupabaseTools(
   input: SupabaseToolInput,
   options?: PluginOptions,
@@ -523,6 +545,26 @@ export function createSupabaseTools(
             }),
           },
         );
+      },
+    }),
+    supabase_open_mcp_setup: tool({
+      description:
+        "Open Supabase Studio MCP Connect page for a project after the user confirms the project. Use when the user asks to set up, connect, configure, or use Supabase MCP in OpenCode. Before calling, explain MCP briefly and ask: Open Supabase MCP Connect page for <project name> (<project-ref>)?",
+      args: {
+        project_ref: tool.schema.string().describe("Supabase project reference ID"),
+      },
+      async execute(args, _context: SupabaseToolContext) {
+        await ensureSupabaseToolAuth(input, options, deps);
+        const url = createMcpSetupUrl(args.project_ref);
+        const openBrowser = deps.open ?? open;
+        await openBrowser(url);
+        await deps.logger?.info("supabase mcp setup opened", {
+          tool: "supabase_open_mcp_setup",
+          sessionID: _context.sessionID,
+          messageID: _context.messageID,
+          agent: _context.agent,
+        });
+        return formatMcpSetupResult(args.project_ref);
       },
     }),
     supabase_login: tool({
