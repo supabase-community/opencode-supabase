@@ -48,7 +48,7 @@ If the user pastes the Studio prompt or config snippet back into chat and asks f
 Add a plugin-owned skill:
 
 ```text
-skills/supabase-opencode/SKILL.md
+skills/opencode-supabase-guide/SKILL.md
 ```
 
 This skill is local to this repository. It is separate from `skills/supabase` and `skills/supabase-postgres-best-practices`, which are vendored from `supabase/agent-skills`.
@@ -69,7 +69,7 @@ The skill should teach the agent that:
 - If the user asks for config editing, prefer project-local `opencode.json` in the repo root over global `~/.config/opencode/opencode.json`, unless the user explicitly wants a global MCP server.
 - After config changes, the agent should tell the user to restart OpenCode and run `opencode mcp auth supabase` if OAuth is not prompted automatically.
 
-Register `supabase-opencode` as a bundled skill by adding it to the plugin skill registry. Keep the upstream skill sync script unchanged so it continues to manage only upstream-owned skill directories.
+Register `opencode-supabase-guide` as a bundled skill by adding it to the plugin skill registry. Keep the upstream skill sync script unchanged so it continues to manage only upstream-owned skill directories.
 
 ## Tool Contract
 
@@ -149,7 +149,7 @@ The docs should not promise automatic config editing or read-only-by-default beh
 
 Add or update tests for:
 
-- `resolveEnabledSupabaseSkills` includes `supabase-opencode` by default.
+- `resolveEnabledSupabaseSkills` includes `opencode-supabase-guide` by default.
 - `registerSupabaseSkillPaths` registers the new skill path and preserves existing paths.
 - The server config hook includes the new skill path.
 - Tool registration includes `supabase_open_mcp_setup`.
