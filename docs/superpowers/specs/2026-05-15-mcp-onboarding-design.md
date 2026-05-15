@@ -43,6 +43,34 @@ The agent should not give a hard-coded read-only recommendation until product fe
 
 If the user pastes the Studio prompt or config snippet back into chat and asks for help applying it, the agent should adapt the MCP config for project-local OpenCode setup in `opencode.json` unless the user explicitly wants global setup. The agent should skip any Studio instruction to install Supabase Agent Skills because this plugin already bundles them.
 
+## Studio Prompt Handling
+
+Studio's OpenCode MCP prompt is the source of truth for the MCP configuration. The agent should use the pasted prompt or config snippet to understand what Studio generated, what to ignore, and what to preserve.
+
+If the Studio prompt includes a plain project URL:
+
+```text
+https://mcp.supabase.com/mcp?project_ref=<project-ref>
+```
+
+the agent should preserve that exact URL. If the Studio prompt includes read-only mode or feature groups:
+
+```text
+https://mcp.supabase.com/mcp?project_ref=<project-ref>&read_only=true&features=docs%2Caccount%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions%2Cbranching%2Cstorage
+```
+
+the agent should preserve that exact URL, including parameter order, encoded feature list, and any future parameters. The agent should not rebuild the URL from `project_ref`, should not decode or re-encode `features`, should not add `read_only=true` when Studio omitted it, and should not remove `read_only=true` when Studio included it.
+
+When handling Studio prompts, the agent should:
+
+- Extract the MCP JSON config block from the pasted prompt.
+- Tolerate copied code blocks that include line numbers such as `1{` and `2  "$schema"...`.
+- Preserve the MCP server key from the JSON, usually `supabase`.
+- Use the auth command shown by Studio, usually `opencode mcp auth supabase`.
+- Ignore the optional `npx skills add supabase/agent-skills` step because this plugin already bundles Supabase Agent Skills.
+- Prefer project-local `opencode.json` only when the user asks for help applying the config in the current repository.
+- Ask before editing OpenCode config.
+
 ## Plugin Skill
 
 Add a plugin-owned skill:
@@ -65,7 +93,7 @@ The skill should teach the agent that:
 - If the project is ambiguous, the agent should list projects and ask which project to connect.
 - If the user asks what MCP is, the agent should explain before opening Studio.
 - After opening Studio, the agent should tell the user they can paste the Studio prompt or OpenCode config snippet back if they want help wiring it into this repo.
-- If the user pastes Studio instructions, the agent should skip `npx skills add supabase/agent-skills` because this plugin already bundles Supabase skills.
+- If the user pastes Studio instructions, the agent should extract the MCP JSON block, strip copied line numbers if present, preserve the Studio-generated MCP URL exactly, and skip `npx skills add supabase/agent-skills` because this plugin already bundles Supabase skills.
 - If the user asks for config editing, prefer project-local `opencode.json` in the repo root over global `~/.config/opencode/opencode.json`, unless the user explicitly wants a global MCP server.
 - After config changes, the agent should tell the user to restart OpenCode and run `opencode mcp auth supabase` if OAuth is not prompted automatically.
 
@@ -156,6 +184,7 @@ Add or update tests for:
 - The tool builds the expected Studio URL.
 - The tool requires Supabase auth consistently with other Supabase tools.
 - The tool result includes paste-back guidance, bundled-skills guidance, and restart/auth guidance.
+- Skill pressure scenarios verify that Studio prompt handling preserves plain MCP URLs and read-only/feature-group MCP URLs exactly.
 
 Use repository package scripts for verification. Do not run raw `bun test`; use `bun run test` or `bun run test <test-file>`.
 
@@ -166,6 +195,7 @@ Use repository package scripts for verification. Do not run raw `bun test`; use 
 - Agent confirms the selected project before opening the browser.
 - Agent can guide the user through the Studio Connect Sheet.
 - Agent asks the user to paste the Studio prompt or OpenCode config snippet back if they want help applying it.
+- Agent preserves Studio-generated MCP URLs exactly when the user asks for help applying a pasted Studio prompt.
 - Agent does not tell the user to install Supabase Agent Skills because this plugin already bundles them.
 - Browser opens the deterministic Studio MCP/OpenCode URL for the selected project.
 - Plugin-owned skill is bundled and enabled by default.

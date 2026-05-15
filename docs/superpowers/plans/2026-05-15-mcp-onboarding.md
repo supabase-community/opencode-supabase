@@ -41,46 +41,54 @@ The branch already contains the design spec commit. Continue on this branch unle
 - Modify: `README.md`
   - document MCP onboarding, Studio source of truth, paste-back flow, bundled-skills skip, restart/auth guidance, and no automatic config editing promise
 
-## Task 1: Skill Behavior Pressure Tests
+## Skill Behavior Contract
+
+The `opencode-supabase-guide` skill must teach agent behavior, not just describe the feature. It must make these decisions unambiguous:
+
+- Explain Supabase MCP before setup: MCP adds project-scoped Supabase tools to OpenCode after the remote MCP server is connected.
+- Distinguish plugin tools from MCP tools: plugin Management API tools handle account/project setup; MCP handles richer project-scoped capabilities selected in Studio.
+- Resolve the target project before opening Studio.
+- Ask explicit confirmation before any browser-opening tool call: `Open Supabase MCP Connect page for Acme Prod (yepepldpwepdbczomujk)?`
+- After Studio opens, tell the user to paste the Studio prompt or OpenCode config snippet back if they want config help.
+- Treat pasted Studio Connect MCP prompts as the source of truth for config.
+- Extract the MCP JSON config block from the prompt.
+- Strip copied line numbers such as `1{` and `2  "$schema"...` before parsing or applying JSON.
+- Preserve the Studio-generated MCP `url` string exactly, including `project_ref`, `read_only=true`, encoded `features=...`, parameter order, and future parameters.
+- Preserve the MCP server key from the JSON, usually `supabase`.
+- Use the auth command shown by Studio, usually `opencode mcp auth supabase`.
+- Ignore the optional `npx skills add supabase/agent-skills` step because this plugin already bundles Supabase skills.
+- Prefer project-local `./opencode.json` when the user asks to apply the config in the current repo, unless the user explicitly asks for global setup.
+- Ask before editing config.
+- Remind the user to restart OpenCode after config changes and run `opencode mcp auth supabase` if OAuth is not prompted automatically.
+- Do not choose MCP feature groups for the user.
+- Do not invent a read-only policy. If Studio prompt includes `read_only=true`, keep it. If Studio prompt omits it, do not add it.
+- Do not rebuild Studio MCP URLs from `project_ref`.
+
+## Skill Authoring
+
+Before creating or editing `skills/opencode-supabase-guide/SKILL.md`, use the `writing-skills` skill.
+
+Pressure scenarios to test:
+
+- Setup request with known project: agent explains MCP, asks confirmation before opening Studio, no tool call before confirmation.
+- “Why MCP if plugin already has Supabase tools?”: agent explains plugin Management API tools versus project-scoped MCP tools.
+- Plain Studio prompt pasted: agent extracts JSON, strips line numbers, preserves URL exactly, skips Agent Skills install, mentions auth/restart.
+- Studio prompt with `read_only=true` and `features=...`: agent preserves full URL exactly, without decoding, reordering, removing, or adding params.
+- “Wire this into this repo”: agent asks before editing, prefers repo-root `opencode.json`, avoids global config unless requested.
+- “Generate safest config without opening Studio”: agent does not invent read-only/feature policy; offers Studio or asks for Studio prompt.
+- MCP tools missing after config: agent suggests restarting OpenCode and running `opencode mcp auth supabase`.
+- Studio says “Install Agent Skills”: agent tells user to skip because plugin already bundles Supabase skills.
+
+## Task 1: Skill Authoring
 
 **Files:**
 - Create later: `skills/opencode-supabase-guide/SKILL.md`
 
-- [ ] **Step 1: Run baseline pressure scenario without plugin skill**
+- [ ] **Step 1: Use writing-skills**
 
-Use the `task` tool with `subagent_type: general`. Do not create the skill before this step.
+Use `writing-skills` before creating or editing `skills/opencode-supabase-guide/SKILL.md`.
 
-Prompt:
-
-```text
-You are testing baseline agent behavior for a future OpenCode plugin skill. Do not read or assume any `skills/opencode-supabase-guide/SKILL.md` file exists. Read only `/home/jumski/Code/jumski/opencode-supabase/docs/superpowers/specs/2026-05-15-mcp-onboarding-design.md` if needed. Scenario: user says, "Set up Supabase MCP for my project." You know there is a project named "Acme Prod" with ref "yepepldpwepdbczomujk". Return the exact user-facing response and any tool call you would make. Do not edit files.
-```
-
-Expected RED signal: the response violates at least one target behavior, such as opening/calling before explicit confirmation, recommending read-only as a fixed default, choosing feature groups, omitting paste-back guidance, or recommending `npx skills add supabase/agent-skills`.
-
-- [ ] **Step 2: Run config-snippet baseline scenario without plugin skill**
-
-Use the `task` tool with `subagent_type: general`.
-
-Prompt:
-
-```text
-You are testing baseline agent behavior for a future OpenCode plugin skill. Do not read or assume any `skills/opencode-supabase-guide/SKILL.md` file exists. Read only `/home/jumski/Code/jumski/opencode-supabase/docs/superpowers/specs/2026-05-15-mcp-onboarding-design.md` if needed. Scenario: user pasted this Studio prompt: "Add this to ~/.config/opencode/opencode.json, then run opencode mcp auth supabase, then run npx skills add supabase/agent-skills." The user asks, "Can you apply this here?" Return what you would do and what config path you would prefer. Do not edit files.
-```
-
-Expected RED signal: the response follows global config by default, installs Agent Skills, skips restart/auth guidance, or edits config without preserving the Studio-provided MCP URL.
-
-- [ ] **Step 3: Record baseline failures in implementation notes**
-
-Add a short implementation note in the PR description or local scratch notes, not in the repository. Use exact failures from the subagent output. This example shows the required shape:
-
-```text
-Skill baseline failures observed:
-- Opened or called MCP setup before explicit project confirmation.
-- Followed Studio's global Agent Skills install step instead of skipping it for this plugin.
-```
-
-Expected: at least one concrete failure is recorded before writing the skill.
+Expected: skill authoring follows `writing-skills` using the pressure scenarios above.
 
 ## Task 2: Plugin Skill
 
@@ -89,56 +97,30 @@ Expected: at least one concrete failure is recorded before writing the skill.
 
 - [ ] **Step 1: Create plugin-owned skill**
 
-Create `skills/opencode-supabase-guide/SKILL.md`:
+Create `skills/opencode-supabase-guide/SKILL.md` using `writing-skills` guidance and the pressure scenarios above. Do not copy a prewritten skill body from this plan. The skill content should be concise, searchable, and focused on the MCP-specific behavior contract.
+
+Required frontmatter:
 
 ```markdown
 ---
 name: opencode-supabase-guide
 description: Use when users ask about Supabase in OpenCode, especially setting up Supabase MCP, connecting project-scoped MCP tools, or applying Supabase Studio OpenCode MCP config prompts.
 ---
-
-# OpenCode Supabase Guide
-
-## Overview
-
-Supabase MCP adds project-scoped Supabase tools to OpenCode after the user connects the remote MCP server. This plugin also has Management API tools for account-level tasks like login, listing organizations/projects, creating projects, and opening setup pages.
-
-## MCP Setup Flow
-
-When the user asks to set up, connect, configure, or use Supabase MCP:
-
-1. Explain briefly: MCP gives OpenCode project-scoped Supabase tools such as database, docs, advisors, and other Studio-selected capabilities.
-2. If the project is unclear, use Supabase project-listing tools and ask which project to connect.
-3. Before opening a browser, ask: `Open Supabase MCP Connect page for <project name> (<project-ref>)?`
-4. Only after explicit confirmation, call `supabase_open_mcp_setup` with the selected `project_ref`.
-5. Tell the user Studio is the source of truth for MCP feature groups and permissions.
-6. Tell the user they can paste the Studio prompt or OpenCode config snippet back if they want help wiring it into this repo.
-
-## Studio Prompt Handling
-
-If the user pastes Studio instructions or an OpenCode MCP config snippet and asks for help applying it:
-
-- Preserve the MCP URL Studio generated, including `project_ref`, `features`, and any permission parameters.
-- Prefer project-local `opencode.json` in the repo root unless the user explicitly asks for global setup.
-- Do not install Supabase Agent Skills. This plugin already bundles Supabase skills.
-- After config changes, tell the user to restart OpenCode and run `opencode mcp auth supabase` if OAuth is not prompted automatically.
-
-## Boundaries
-
-- Do not choose MCP feature groups for the user.
-- Do not choose a hard-coded read-only policy until product direction is confirmed.
-- Do not edit MCP config unless the user asks for config help after seeing or pasting Studio output.
-- Do not use slash-command injection, prompt injection, or chat-message automation for MCP onboarding.
-
-## Quick Reference
-
-| User asks | Agent should |
-| --- | --- |
-| "What is Supabase MCP?" | Explain project-scoped MCP tools; do not open browser yet |
-| "Set up MCP for this project" | Resolve project, confirm project/ref, then call `supabase_open_mcp_setup` |
-| "Studio says install Agent Skills" | Say this plugin already bundles Supabase skills; skip that step |
-| "Apply this config" | Prefer repo-root `opencode.json`, preserve Studio URL, restart/auth guidance |
 ```
+
+Required content:
+
+- Heading: `# OpenCode Supabase Guide`
+- Sections: `Overview`, `When to Use`, `MCP Setup Flow`, `Studio Prompt Handling`, `Config Application Rules`, `Boundaries`, `Troubleshooting`, `Quick Reference`, `Common Mistakes`
+- Must explain plugin Management API tools versus project-scoped MCP tools.
+- Must require project resolution and explicit confirmation before calling `supabase_open_mcp_setup`.
+- Must tell users to paste the Studio prompt/config back if they want repo-local config help.
+- Must include this rule: `Never rebuild Studio MCP URLs. Preserve pasted URLs exactly because Studio encodes project, read-only mode, feature groups, and future parameters.`
+- Must cover line-number stripping for copied Studio JSON code blocks.
+- Must cover skipping `npx skills add supabase/agent-skills` because this plugin bundles Supabase skills.
+- Must prefer repo-root `opencode.json` only after the user asks to apply config in this repo, unless the user explicitly asks for global config.
+- Must remind users to restart OpenCode and run the Studio auth command, usually `opencode mcp auth supabase`, if OAuth is not prompted automatically.
+- Must include common mistakes for rebuilding URLs, installing Agent Skills, writing global config by default, and choosing read-only/feature groups.
 
 - [ ] **Step 2: Verify skill file shape**
 
@@ -150,45 +132,7 @@ bun run typecheck
 
 Expected: existing TypeScript check remains green; the markdown file does not affect typecheck.
 
-- [ ] **Step 3: Run pressure scenario with skill content**
-
-Use the `task` tool with `subagent_type: general`.
-
-Prompt:
-
-```text
-Read `/home/jumski/Code/jumski/opencode-supabase/skills/opencode-supabase-guide/SKILL.md` and `/home/jumski/Code/jumski/opencode-supabase/docs/superpowers/specs/2026-05-15-mcp-onboarding-design.md`. Scenario: user says, "Set up Supabase MCP for my project." You know there is a project named "Acme Prod" with ref "yepepldpwepdbczomujk". Return the exact user-facing response and any tool call you would make. Do not edit files.
-```
-
-Expected GREEN signal:
-
-```text
-Explains MCP briefly.
-Asks "Open Supabase MCP Connect page for Acme Prod (yepepldpwepdbczomujk)?"
-Does not call supabase_open_mcp_setup until the user confirms.
-Does not choose feature groups or read-only policy.
-```
-
-- [ ] **Step 4: Run config-snippet scenario with skill content**
-
-Use the `task` tool with `subagent_type: general`.
-
-Prompt:
-
-```text
-Read `/home/jumski/Code/jumski/opencode-supabase/skills/opencode-supabase-guide/SKILL.md` and `/home/jumski/Code/jumski/opencode-supabase/docs/superpowers/specs/2026-05-15-mcp-onboarding-design.md`. Scenario: user pasted this Studio prompt: "Add this to ~/.config/opencode/opencode.json, then run opencode mcp auth supabase, then run npx skills add supabase/agent-skills." The Studio config URL is `https://mcp.supabase.com/mcp?project_ref=yepepldpwepdbczomujk&features=docs%2Cdatabase`. The user asks, "Can you apply this here?" Return what you would do and what config path you would prefer. Do not edit files.
-```
-
-Expected GREEN signal:
-
-```text
-Prefers repo-root opencode.json.
-Preserves the Studio MCP URL including features.
-Says to skip Agent Skills installation because plugin bundles them.
-Mentions restart OpenCode and run opencode mcp auth supabase if OAuth is not prompted.
-```
-
-- [ ] **Step 5: Commit skill file**
+- [ ] **Step 3: Commit skill file**
 
 Run:
 
