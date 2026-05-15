@@ -12,6 +12,7 @@ describe("resolveEnabledSupabaseSkills", () => {
     expect(resolveEnabledSupabaseSkills(undefined)).toEqual([
       "supabase",
       "supabase-postgres-best-practices",
+      "opencode-supabase-guide",
     ]);
   });
 
@@ -22,6 +23,7 @@ describe("resolveEnabledSupabaseSkills", () => {
   test("keeps omitted skill keys enabled", () => {
     expect(resolveEnabledSupabaseSkills({ skills: { "supabase-postgres-best-practices": false } })).toEqual([
       "supabase",
+      "opencode-supabase-guide",
     ]);
   });
 
@@ -30,6 +32,7 @@ describe("resolveEnabledSupabaseSkills", () => {
     expect(resolveEnabledSupabaseSkills({ skills: { typo: false } }, { warn: (_message, data) => warnings.push(data) })).toEqual([
       "supabase",
       "supabase-postgres-best-practices",
+      "opencode-supabase-guide",
     ]);
     expect(warnings).toHaveLength(1);
   });
@@ -39,6 +42,7 @@ describe("resolveEnabledSupabaseSkills", () => {
     expect(resolveEnabledSupabaseSkills({ skills: { supabase: "yes" } }, { warn: (_message, data) => warnings.push(data) })).toEqual([
       "supabase",
       "supabase-postgres-best-practices",
+      "opencode-supabase-guide",
     ]);
     expect(warnings).toHaveLength(1);
   });
@@ -54,6 +58,7 @@ describe("registerSupabaseSkillPaths", () => {
     expect(config.skills?.paths).toEqual([
       "/plugin/skills/supabase",
       "/plugin/skills/supabase-postgres-best-practices",
+      "/plugin/skills/opencode-supabase-guide",
     ]);
   });
 
@@ -66,6 +71,7 @@ describe("registerSupabaseSkillPaths", () => {
     expect(config.skills.paths).toEqual([
       "/plugin/skills/supabase",
       "/plugin/skills/supabase-postgres-best-practices",
+      "/plugin/skills/opencode-supabase-guide",
     ]);
   });
 
@@ -87,6 +93,7 @@ describe("registerSupabaseSkillPaths", () => {
         "/user/skills",
         "/plugin/skills/supabase",
         "/plugin/skills/supabase-postgres-best-practices",
+        "/plugin/skills/opencode-supabase-guide",
       ],
       urls: ["https://example.com/.well-known/skills/"],
     });
@@ -100,7 +107,10 @@ describe("registerSupabaseSkillPaths", () => {
       exists: (path) => !path.endsWith("postgres-best-practices"),
       warn: (_message, data) => warnings.push(data),
     });
-    expect(config.skills?.paths).toEqual(["/plugin/skills/supabase"]);
+    expect(config.skills?.paths).toEqual([
+      "/plugin/skills/supabase",
+      "/plugin/skills/opencode-supabase-guide",
+    ]);
     expect(warnings).toHaveLength(1);
   });
 
@@ -166,6 +176,7 @@ describe("server config hook", () => {
         "/user/skills",
         path.join(skillsRoot, "supabase"),
         path.join(skillsRoot, "supabase-postgres-best-practices"),
+        path.join(skillsRoot, "opencode-supabase-guide"),
       ],
       urls: ["https://example.com/.well-known/skills/"],
     });
