@@ -1912,6 +1912,9 @@ describe("server tools auth helper", () => {
       "https://supabase.com/dashboard/project/yepepldpwepdbczomujk?showConnect=true&connectTab=mcp&mcpClient=opencode",
     );
     expect(result).toContain("Opened Supabase MCP setup for project yepepldpwepdbczomujk in Studio.");
+    expect(result).toContain(
+      "URL: https://supabase.com/dashboard/project/yepepldpwepdbczomujk?showConnect=true&connectTab=mcp&mcpClient=opencode",
+    );
     expect(result).toContain("paste the Studio prompt or OpenCode config snippet back here");
     expect(result).toContain("skip any \"install Supabase Agent Skills\" step");
     expect(result).toContain("Restart OpenCode after changing config");

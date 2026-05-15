@@ -431,8 +431,10 @@ function createMcpSetupUrl(projectRef: string) {
   return url.toString();
 }
 
-function formatMcpSetupResult(projectRef: string) {
+function formatMcpSetupResult(projectRef: string, url: string) {
   return `Opened Supabase MCP setup for project ${projectRef} in Studio.
+
+URL: ${url}
 
 On the Connect page:
 1. Confirm MCP tab and OpenCode client are selected.
@@ -564,7 +566,7 @@ export function createSupabaseTools(
           messageID: _context.messageID,
           agent: _context.agent,
         });
-        return formatMcpSetupResult(args.project_ref);
+        return formatMcpSetupResult(args.project_ref, url);
       },
     }),
     supabase_login: tool({
