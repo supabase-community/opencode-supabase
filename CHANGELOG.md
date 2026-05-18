@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+### Minor Changes
+
+- 691346a: Add Supabase MCP onboarding: plugin-owned `opencode-supabase-guide` skill, authenticated `supabase_open_mcp_setup` server tool, updated TUI onboarding message, and README docs.
+
 ## 0.2.2
 
 ### Patch Changes
