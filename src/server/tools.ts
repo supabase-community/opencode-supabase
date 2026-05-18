@@ -424,7 +424,7 @@ export async function ensureSupabaseToolAuth(
 }
 
 function createMcpSetupUrl(projectRef: string) {
-  const url = new URL(`https://supabase.com/dashboard/project/${encodeURIComponent(projectRef)}`);
+  const url = new URL(`https://supabase.com/dashboard/project/${projectRef}`);
   url.searchParams.set("showConnect", "true");
   url.searchParams.set("connectTab", "mcp");
   url.searchParams.set("mcpClient", "opencode");
