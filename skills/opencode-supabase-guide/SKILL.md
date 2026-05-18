@@ -25,7 +25,7 @@ Supabase MCP adds project-scoped Supabase tools to OpenCode. Before MCP setup, t
 1. Resolve project with `supabase_list_projects`. If auth fails, tell user: "Run `/supabase` to connect your Supabase account." If multiple projects, use `question` tool listing name + ref for each.
 2. Use `question` tool to confirm: "Open Supabase MCP Connect for `<name>` (`<ref>`)?"
 3. Call `supabase_open_mcp_setup`. Always print returned URL in output.
-4. Tell user to paste Studio prompt/config back for wiring into `opencode.json`.
+4. Tell user to paste Studio prompt/config back for wiring into `.opencode/opencode.json`.
 
 ## Studio Prompt Handling
 
@@ -33,7 +33,7 @@ Extract MCP JSON from Studio prompt. Strip line numbers (`1{`). Preserve URLs ex
 
 ## Config Rules
 
-Prefer repo-root `opencode.json` (or `.jsonc`). Global (`~/.config/opencode/opencode.json`) only on explicit request. Use `question` tool before editing. Remind to restart OpenCode.
+Prefer `.opencode/opencode.json` (or `.opencode/opencode.jsonc`). Global (`~/.config/opencode/opencode.json`) only on explicit request. Use `question` tool before editing. Remind to restart OpenCode.
 
 ## Common Mistakes
 
@@ -42,7 +42,7 @@ Prefer repo-root `opencode.json` (or `.jsonc`). Global (`~/.config/opencode/open
 | Rebuilding/normalizing Studio URLs      | Preserve pasted URLs exactly             |
 | Omitting setup URL from output          | Always print exact returned URL          |
 | Installing separate Agent Skills        | Already bundled in this plugin           |
-| Writing global config by default        | Prefer repo-root `opencode.json`            |
+| Writing global config by default        | Prefer `.opencode/opencode.json`            |
 | Choosing MCP features for user          | Studio decides read-only, feature groups |
 | Calling MCP setup while unauthenticated | Tell user to run `/supabase` first         |
 | Asking user without `question` tool     | Always use `question` tool for confirmations, project selection, any interactive choice |

@@ -57,7 +57,7 @@ The `opencode-supabase-guide` skill must teach agent behavior, not just describe
 - Preserve the MCP server key from the JSON, usually `supabase`.
 - Use the auth command shown by Studio, usually `opencode mcp auth supabase`.
 - Ignore the optional `npx skills add supabase/agent-skills` step because this plugin already bundles Supabase skills.
-- Prefer project-local `./opencode.json` when the user asks to apply the config in the current repo, unless the user explicitly asks for global setup.
+- Prefer project-local `.opencode/opencode.json` when the user asks to apply the config in the current repo, unless the user explicitly asks for global setup.
 - Ask before editing config.
 - Remind the user to restart OpenCode after config changes and run `opencode mcp auth supabase` if OAuth is not prompted automatically.
 - Do not choose MCP feature groups for the user.
@@ -74,7 +74,7 @@ Pressure scenarios to test:
 - “Why MCP if plugin already has Supabase tools?”: agent explains plugin Management API tools versus project-scoped MCP tools.
 - Plain Studio prompt pasted: agent extracts JSON, strips line numbers, preserves URL exactly, skips Agent Skills install, mentions auth/restart.
 - Studio prompt with `read_only=true` and `features=...`: agent preserves full URL exactly, without decoding, reordering, removing, or adding params.
-- “Wire this into this repo”: agent asks before editing, prefers repo-root `opencode.json`, avoids global config unless requested.
+- “Wire this into this repo”: agent asks before editing, prefers `.opencode/opencode.json`, avoids global config unless requested.
 - “Generate safest config without opening Studio”: agent does not invent read-only/feature policy; offers Studio or asks for Studio prompt.
 - MCP tools missing after config: agent suggests restarting OpenCode and running `opencode mcp auth supabase`.
 - Studio says “Install Agent Skills”: agent tells user to skip because plugin already bundles Supabase skills.
@@ -118,7 +118,7 @@ Required content:
 - Must include this rule: `Never rebuild Studio MCP URLs. Preserve pasted URLs exactly because Studio encodes project, read-only mode, feature groups, and future parameters.`
 - Must cover line-number stripping for copied Studio JSON code blocks.
 - Must cover skipping `npx skills add supabase/agent-skills` because this plugin bundles Supabase skills.
-- Must prefer repo-root `opencode.json` only after the user asks to apply config in this repo, unless the user explicitly asks for global config.
+- Must prefer `.opencode/opencode.json` only after the user asks to apply config in this repo, unless the user explicitly asks for global config.
 - Must remind users to restart OpenCode and run the Studio auth command, usually `opencode mcp auth supabase`, if OAuth is not prompted automatically.
 - Must include common mistakes for rebuilding URLs, installing Agent Skills, writing global config by default, and choosing read-only/feature groups.
 

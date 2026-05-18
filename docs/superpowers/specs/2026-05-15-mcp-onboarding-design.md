@@ -41,7 +41,7 @@ When the user asks to set up or learn about Supabase MCP:
 
 The agent should not give a hard-coded read-only recommendation until product feedback confirms the desired default. It should tell the user to choose feature groups and permissions in Studio based on their needs.
 
-If the user pastes the Studio prompt or config snippet back into chat and asks for help applying it, the agent should adapt the MCP config for project-local OpenCode setup in `opencode.json` unless the user explicitly wants global setup. The agent should skip any Studio instruction to install Supabase Agent Skills because this plugin already bundles them.
+If the user pastes the Studio prompt or config snippet back into chat and asks for help applying it, the agent should adapt the MCP config for project-local OpenCode setup in `.opencode/opencode.json` unless the user explicitly wants global setup. The agent should skip any Studio instruction to install Supabase Agent Skills because this plugin already bundles them.
 
 ## Studio Prompt Handling
 
@@ -68,7 +68,7 @@ When handling Studio prompts, the agent should:
 - Preserve the MCP server key from the JSON, usually `supabase`.
 - Use the auth command shown by Studio, usually `opencode mcp auth supabase`.
 - Ignore the optional `npx skills add supabase/agent-skills` step because this plugin already bundles Supabase Agent Skills.
-- Prefer project-local `opencode.json` only when the user asks for help applying the config in the current repository.
+- Prefer project-local `.opencode/opencode.json` only when the user asks for help applying the config in the current repository.
 - Ask before editing OpenCode config.
 
 ## Plugin Skill
@@ -94,7 +94,7 @@ The skill should teach the agent that:
 - If the user asks what MCP is, the agent should explain before opening Studio.
 - After opening Studio, the agent should tell the user they can paste the Studio prompt or OpenCode config snippet back if they want help wiring it into this repo.
 - If the user pastes Studio instructions, the agent should extract the MCP JSON block, strip copied line numbers if present, preserve the Studio-generated MCP URL exactly, and skip `npx skills add supabase/agent-skills` because this plugin already bundles Supabase skills.
-- If the user asks for config editing, prefer project-local `opencode.json` in the repo root over global `~/.config/opencode/opencode.json`, unless the user explicitly wants a global MCP server.
+- If the user asks for config editing, prefer project-local `.opencode/opencode.json` over global `~/.config/opencode/opencode.json`, unless the user explicitly wants a global MCP server.
 - After config changes, the agent should tell the user to restart OpenCode and run `opencode mcp auth supabase` if OAuth is not prompted automatically.
 
 Register `opencode-supabase-guide` as a bundled skill by adding it to the plugin skill registry. Keep the upstream skill sync script unchanged so it continues to manage only upstream-owned skill directories.
@@ -167,7 +167,7 @@ Update `README.md` to include:
 - Example prompt: `Set up Supabase MCP for my project`.
 - Short distinction between plugin tools and MCP tools.
 - Note that Studio handles MCP feature groups and permissions.
-- Note that users can paste the Studio prompt or OpenCode config snippet back into OpenCode if they want help adapting it for project-local `opencode.json`.
+- Note that users can paste the Studio prompt or OpenCode config snippet back into OpenCode if they want help adapting it for project-local `.opencode/opencode.json`.
 - Note that Supabase Agent Skills are already bundled with this plugin, so the user can skip separate Agent Skills installation if Studio shows it.
 - Note that config changes may require restarting OpenCode and running `opencode mcp auth supabase`.
 
