@@ -1886,6 +1886,60 @@ describe("server tools auth helper", () => {
     ).rejects.toThrow("Failed to list regions: 403 nope");
   });
 
+  test("opens Supabase MCP setup page for a project ref", async () => {
+    const { input } = await createInput();
+    await writeSavedAuth(input, {
+      access: "saved-access",
+      refresh: "saved-refresh",
+      expires: Date.now() + 60_000,
+    });
+    const openMock = mock(async () => undefined);
+    const tools = createSupabaseTools(
+      input,
+      {
+        clientId: "plugin-client",
+        oauthPort: 17686,
+      },
+      { open: openMock },
+    );
+
+    const result = await tools.supabase_open_mcp_setup.execute(
+      { project_ref: "yepepldpwepdbczomujk" },
+      createContext(input),
+    );
+
+    expect(openMock).toHaveBeenCalledWith(
+      "https://supabase.com/dashboard/project/yepepldpwepdbczomujk?showConnect=true&connectTab=mcp&mcpClient=opencode",
+    );
+    expect(result).toContain("Opened Supabase MCP setup for project yepepldpwepdbczomujk in Studio.");
+    expect(result).toContain(
+      "URL: https://supabase.com/dashboard/project/yepepldpwepdbczomujk?showConnect=true&connectTab=mcp&mcpClient=opencode",
+    );
+    expect(result).toContain("paste the Studio prompt or OpenCode config snippet back here");
+    expect(result).toContain("skip any \"install Supabase Agent Skills\" step");
+    expect(result).toContain("Restart OpenCode after changing config");
+    expect(result).toContain("opencode mcp auth supabase");
+  });
+
+  test("requires Supabase auth before opening MCP setup page", async () => {
+    const { input } = await createInput();
+    const openMock = mock(async () => undefined);
+    const tools = createSupabaseTools(
+      input,
+      {
+        clientId: "plugin-client",
+        oauthPort: 17687,
+      },
+      { open: openMock },
+    );
+
+    await expect(
+      tools.supabase_open_mcp_setup.execute({ project_ref: "proj_123" }, createContext(input)),
+    ).rejects.toThrow("Supabase is not connected. Run /supabase first.");
+
+    expect(openMock).not.toHaveBeenCalled();
+  });
+
   test("supabase_login returns TUI guidance", async () => {
     const { input } = await createInput();
 

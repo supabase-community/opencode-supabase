@@ -22,14 +22,16 @@ type SupabaseDialogProps = {
 
 const ONBOARDING_MESSAGE = `Supabase is connected.
 
-You can ask me about:
+Now unlock project-scoped tools with Supabase MCP — ask me to set it up to get database inspection, docs, advisors, and more for your project in OpenCode.
+
+You can also ask about:
 - your organizations and projects
 - API keys for a project
 - available database regions
 - creating a new project
 
 Try this:
-list my Supabase projects`;
+Set up Supabase MCP for my project`;
 
 const onboardedSessionIDsByApi = new WeakMap<TuiPluginApi, Set<string>>();
 

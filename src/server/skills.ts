@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 export const BUNDLED_SUPABASE_SKILLS = [
   "supabase",
   "supabase-postgres-best-practices",
+  "opencode-supabase-guide",
 ] as const;
 
 export type BundledSupabaseSkill = (typeof BUNDLED_SUPABASE_SKILLS)[number];

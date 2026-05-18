@@ -26,8 +26,31 @@ Connect your account and ask your agent about Supabase capabilities.
 
 - `supabase`
 - `supabase-postgres-best-practices`
+- `opencode-supabase-guide`
 
 No separate `skills` CLI setup is required. Installing the plugin makes these skills available to OpenCode through the plugin server config hook.
+
+## Supabase MCP Onboarding
+
+Ask your agent:
+
+```text
+Set up Supabase MCP for my project
+```
+
+The agent can explain Supabase MCP, help you choose the target project, and open the Supabase Studio Connect Sheet with the MCP tab and OpenCode client selected.
+
+Studio remains the source of truth for MCP feature groups, permissions, generated OpenCode config, and auth steps. If you want help applying the Studio output to this repository, paste the Studio prompt or OpenCode config snippet back into OpenCode.
+
+You can skip any Studio instruction to install Supabase Agent Skills separately. This plugin already bundles Supabase skills.
+
+After changing OpenCode MCP config, restart OpenCode. If OAuth is not prompted automatically, run:
+
+```bash
+opencode mcp auth supabase
+```
+
+This plugin opens the MCP setup page and guides the workflow. It does not automatically edit MCP config or choose read-only/feature-group settings for you.
 
 ### Disable Bundled Skills
 
@@ -65,7 +88,7 @@ Bundled skills are vendored as real files under `skills/` from `supabase/agent-s
 bun run skills:sync
 # or: bun run skills:sync <commit-sha-or-ref>
 bun run typecheck
-bun test
+bun run test
 bun run verify:pack
 ```
 
