@@ -1911,14 +1911,20 @@ describe("server tools auth helper", () => {
     expect(openMock).toHaveBeenCalledWith(
       "https://supabase.com/dashboard/project/yepepldpwepdbczomujk?showConnect=true&connectTab=mcp&mcpClient=opencode",
     );
-    expect(result).toContain("Opened Supabase MCP setup for project yepepldpwepdbczomujk in Studio.");
+    expect(result).toContain("MCP Connect page is open:");
     expect(result).toContain(
-      "URL: https://supabase.com/dashboard/project/yepepldpwepdbczomujk?showConnect=true&connectTab=mcp&mcpClient=opencode",
+      "https://supabase.com/dashboard/project/yepepldpwepdbczomujk?showConnect=true&connectTab=mcp&mcpClient=opencode",
     );
-    expect(result).toContain("paste the Studio prompt or OpenCode config snippet back here");
-    expect(result).toContain("skip any \"install Supabase Agent Skills\" step");
-    expect(result).toContain("Restart OpenCode after changing config");
+    expect(result).toContain("Grab config from Supabase Studio:");
+    expect(result).toContain("In Connect -> MCP -> OpenCode, choose permissions.");
+    expect(result).toContain("Copy the generated config under Configure MCP.");
+    expect(result).toContain("Paste the Studio prompt or config snippet back here.");
+    expect(result).toContain("Skip any install Supabase Agent Skills step; this plugin already bundles them.");
+    expect(result).toContain("After adding config, restart OpenCode, then run:");
     expect(result).toContain("opencode mcp auth supabase");
+    expect(result).toContain("Complete OAuth in the browser.");
+    expect(result).not.toContain("if OAuth");
+    expect(result).not.toContain("prompted automatically");
   });
 
   test("requires Supabase auth before opening MCP setup page", async () => {
