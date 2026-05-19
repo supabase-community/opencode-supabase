@@ -438,7 +438,7 @@ test("supabase auth success injects ignored onboarding into current session", as
         expect.objectContaining({
           type: "text",
           ignored: true,
-          text: expect.stringContaining("your organizations and projects"),
+          text: expect.stringContaining("organizations and projects"),
         }),
       ],
     }),
@@ -665,7 +665,7 @@ test("supabase already-connected confirm saves onboarding before navigating from
           {
             type: "text",
             ignored: true,
-            text: "Supabase is connected.\n\nNow unlock project-scoped tools with Supabase MCP — ask me to set it up to get database inspection, docs, advisors, and more for your project in OpenCode.\n\nYou can also ask about:\n- your organizations and projects\n- API keys for a project\n- available database regions\n- creating a new project\n\nTry this:\nSet up Supabase MCP for my project",
+            text: "Supabase is connected.\n\nStart by listing your Supabase projects, then connect project-scoped MCP tools for database inspection, docs, advisors, and more in OpenCode.\n\nYou can also ask about:\n- organizations and projects\n- API keys\n- regions\n- creating a new project\n\nTry this:\nList my Supabase projects",
           },
         ],
       },
