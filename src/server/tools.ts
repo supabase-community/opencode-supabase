@@ -443,10 +443,12 @@ function formatMcpSetupResult(url: string) {
     "",
     "Skip any install Supabase Agent Skills step; this plugin already bundles them.",
     "",
-    "After adding config, restart OpenCode, then run:",
+    "After adding config:",
+    "1. Close OpenCode or exit the current session.",
+    "2. Run:",
     "opencode mcp auth supabase",
-    "",
-    "Complete OAuth in the browser.",
+    "3. Complete OAuth in the browser.",
+    "4. Start OpenCode again.",
   ].join("\n")
 }
 

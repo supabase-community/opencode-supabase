@@ -1,6 +1,6 @@
 ---
 name: opencode-supabase-guide
-description: Use when users ask to set up Supabase MCP in OpenCode, paste Supabase Studio MCP config, or need MCP tools connected.
+description: Use when users ask to set up Supabase MCP in OpenCode, connect project to MCP, connect a project to MCP, connect MCP, conenct MCP, connect MCP server, connect Supabase MCP, paste Supabase Studio MCP config, or need MCP tools connected.
 ---
 
 # OpenCode Supabase Guide
@@ -36,7 +36,33 @@ Supabase MCP adds project-scoped Supabase tools to OpenCode. Before MCP setup, t
 3. After a project is selected, offer to connect that project to Supabase MCP.
 4. If user confirms, call `supabase_open_mcp_setup`.
 5. Tell user to paste the Studio prompt or OpenCode config snippet back here.
-6. After config is added, tell user to restart OpenCode, then run `opencode mcp auth supabase` and complete OAuth in the browser.
+6. After config is added, tell user to close OpenCode or exit the current session, run `opencode mcp auth supabase`, complete OAuth in the browser, then start OpenCode again.
+
+User phrases that MUST trigger this flow include: `connect project to MCP`, `connect a project to MCP`, `connect MCP`, `conenct MCP`, `connect MCP server`, `connect Supabase MCP`, and `connect to Supabase MCP`.
+
+Never list projects as bullets and ask the user to reply in prose. Use this Question tool shape for project selection:
+
+```json
+{
+  "questions": [
+    {
+      "header": "Choose Project",
+      "question": "Which project do you want to connect to Supabase MCP?",
+      "multiple": false,
+      "options": [
+        {
+          "label": "opencode-tester",
+          "description": "Project ref: abcdefghijklmnopqrst"
+        },
+        {
+          "label": "analytics-prod",
+          "description": "Project ref: zyxwvutsrqponmlkjihg"
+        }
+      ]
+    }
+  ]
+}
+```
 
 Use this Question tool shape before opening Studio:
 
@@ -99,13 +125,14 @@ I will set up MCP now.
 
 After Studio config is pasted or applied:
 
-OAuth is a required separate step. OpenCode loads the MCP config only after restart, then `opencode mcp auth supabase` starts browser OAuth for that MCP server.
+OAuth is a required separate step. The current OpenCode TUI session cannot reload the MCP config. Close OpenCode or exit the current session, then `opencode mcp auth supabase` starts browser OAuth for that MCP server. Start OpenCode again after OAuth completes.
 
 Say this:
 
 ```text
-Restart OpenCode, then run `opencode mcp auth supabase`.
+Close OpenCode or exit the current session, then run `opencode mcp auth supabase`.
 Complete OAuth in the browser.
+Start OpenCode again after OAuth completes.
 ```
 
 Do not say:
@@ -115,7 +142,7 @@ OAuth starts by itself after restart.
 Run auth only if MCP fails.
 ```
 
-Never tell the user to wait for automatic OAuth. Always tell them to restart OpenCode, run `opencode mcp auth supabase`, and complete OAuth in the browser.
+Never tell the user to wait for automatic OAuth. Always tell them to close OpenCode or exit the current session, run `opencode mcp auth supabase`, complete OAuth in the browser, and start OpenCode again after OAuth completes.
 
 If config already exists:
 
@@ -123,7 +150,9 @@ Say this:
 
 ```text
 Supabase MCP config already exists for this workspace. No file changes needed.
-Restart OpenCode, then run `opencode mcp auth supabase`.
+Close OpenCode or exit the current session, then run `opencode mcp auth supabase`.
+Complete OAuth in the browser.
+Start OpenCode again after OAuth completes.
 ```
 
 Do not say:
@@ -146,10 +175,11 @@ Restarting loaded the config; cached auth let the MCP server work without a new 
 OpenCode does not automatically start OAuth after config is added. OAuth is a required separate step. After adding MCP config, tell the user:
 
 ```text
-Restart OpenCode, then run:
+Close OpenCode or exit the current session, then run:
 opencode mcp auth supabase
 
 Complete OAuth in the browser.
+Start OpenCode again after OAuth completes.
 ```
 
 ## Studio Prompt Handling
@@ -158,17 +188,18 @@ Extract MCP JSON from Studio prompt. Strip line numbers (`1{`). Preserve URLs ex
 
 ## Config Rules
 
-Prefer `.opencode/opencode.json` (or `.opencode/opencode.jsonc`). Global (`~/.config/opencode/opencode.json`) only on explicit request. Use `question` tool before editing. Remind to restart OpenCode.
+Prefer `.opencode/opencode.json` (or `.opencode/opencode.jsonc`). Global (`~/.config/opencode/opencode.json`) only on explicit request. Use `question` tool before editing. Remind to close OpenCode or exit the current session before auth, then start OpenCode again after OAuth completes.
 
 If the Studio config is already present in `.opencode/opencode.json` or `.opencode/opencode.jsonc`, say:
 
 ```text
 Supabase MCP config already exists for this workspace. No file changes needed.
 
-Restart OpenCode, then run:
+Close OpenCode or exit the current session, then run:
 opencode mcp auth supabase
 
 Complete OAuth in the browser.
+Start OpenCode again after OAuth completes.
 ```
 
 Do not say `already wired` without explaining the restart and auth steps.
@@ -184,8 +215,8 @@ Do not say `already wired` without explaining the restart and auth steps.
 | Choosing MCP features for user          | Studio decides read-only, feature groups |
 | Calling MCP setup while unauthenticated | Tell user to run `/supabase` first         |
 | Asking user without `question` tool     | Always use `question` tool for confirmations, project selection, any interactive choice |
-| Saying OAuth happens automatically      | OAuth is a required separate step: restart OpenCode, run `opencode mcp auth supabase`, complete browser OAuth |
+| Saying OAuth happens automatically      | OAuth is a required separate step: close OpenCode or exit the current session, run `opencode mcp auth supabase`, complete browser OAuth, start OpenCode again |
 
 ## Troubleshooting
 
-MCP tools missing after config? Say: `Restart OpenCode, then run opencode mcp auth supabase.`
+MCP tools missing after config? Say: `Close OpenCode or exit the current session, run opencode mcp auth supabase, complete OAuth, then start OpenCode again.`

@@ -1920,9 +1920,13 @@ describe("server tools auth helper", () => {
     expect(result).toContain("Copy the generated config under Configure MCP.");
     expect(result).toContain("Paste the Studio prompt or config snippet back here.");
     expect(result).toContain("Skip any install Supabase Agent Skills step; this plugin already bundles them.");
-    expect(result).toContain("After adding config, restart OpenCode, then run:");
+    expect(result).toContain("After adding config:");
+    expect(result).toContain("1. Close OpenCode or exit the current session.");
+    expect(result).toContain("2. Run:");
     expect(result).toContain("opencode mcp auth supabase");
-    expect(result).toContain("Complete OAuth in the browser.");
+    expect(result).toContain("3. Complete OAuth in the browser.");
+    expect(result).toContain("4. Start OpenCode again.");
+    expect(result).not.toContain("After adding config, restart OpenCode, then run:");
     expect(result).not.toContain("if OAuth");
     expect(result).not.toContain("prompted automatically");
     expect(result).not.toContain("if it does not work");

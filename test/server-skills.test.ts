@@ -190,13 +190,23 @@ describe("opencode-supabase-guide skill", () => {
 
     expect(skillContent).toContain("Say this:");
     expect(skillContent).toContain("Do not say:");
+    expect(skillContent).toContain("connect project to MCP");
+    expect(skillContent).toContain("connect a project to MCP");
+    expect(skillContent).toContain("connect MCP");
+    expect(skillContent).toContain("conenct MCP");
+    expect(skillContent).toContain("connect MCP server");
+    expect(skillContent).toContain("connect Supabase MCP");
+    expect(skillContent).toContain("Which project do you want to connect to Supabase MCP?");
+    expect(skillContent).toContain("Never list projects as bullets and ask the user to reply in prose.");
     expect(skillContent).toContain("Ask me to list your Supabase projects first.");
     expect(skillContent).toContain("Connect this project to Supabase MCP?");
-    expect(skillContent).toContain("Restart OpenCode, then run `opencode mcp auth supabase`.");
+    expect(skillContent).toContain("Close OpenCode or exit the current session, then run `opencode mcp auth supabase`.");
+    expect(skillContent).toContain("Start OpenCode again after OAuth completes.");
     expect(skillContent).toContain("MCP auth may already be cached from an earlier setup.");
     expect(skillContent).toContain("OAuth is a required separate step.");
     expect(skillContent).toContain("Never tell the user to wait for automatic OAuth.");
     expect(skillContent).toContain("No file changes needed.");
+    expect(skillContent).not.toContain("Restart OpenCode, then run `opencode mcp auth supabase`.");
     expect(skillContent).not.toContain("OAuth will prompt automatically");
     expect(skillContent).not.toContain("Already wired");
   });
