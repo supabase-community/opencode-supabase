@@ -431,7 +431,7 @@ function createMcpSetupUrl(projectRef: string) {
   return url.toString();
 }
 
-function formatMcpSetupResult(projectRef: string, url: string) {
+function formatMcpSetupResult(url: string) {
   return [
     "MCP Connect page is open:",
     url,
@@ -571,7 +571,7 @@ export function createSupabaseTools(
           messageID: _context.messageID,
           agent: _context.agent,
         });
-        return formatMcpSetupResult(args.project_ref, url);
+        return formatMcpSetupResult(url);
       },
     }),
     supabase_login: tool({

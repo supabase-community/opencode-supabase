@@ -99,6 +99,8 @@ I will set up MCP now.
 
 After Studio config is pasted or applied:
 
+OAuth is a required separate step. OpenCode loads the MCP config only after restart, then `opencode mcp auth supabase` starts browser OAuth for that MCP server.
+
 Say this:
 
 ```text
@@ -109,9 +111,11 @@ Complete OAuth in the browser.
 Do not say:
 
 ```text
-OAuth will prompt automatically.
-Run auth if it does not work.
+OAuth starts by itself after restart.
+Run auth only if MCP fails.
 ```
+
+Never tell the user to wait for automatic OAuth. Always tell them to restart OpenCode, run `opencode mcp auth supabase`, and complete OAuth in the browser.
 
 If config already exists:
 
@@ -125,7 +129,7 @@ Restart OpenCode, then run `opencode mcp auth supabase`.
 Do not say:
 
 ```text
-Already wired.
+Config already wired.
 ```
 
 If user says MCP works after only restarting:
@@ -139,7 +143,7 @@ Restarting loaded the config; cached auth let the MCP server work without a new 
 
 ## OpenCode Auth
 
-OpenCode does not automatically start OAuth after config is added. After adding MCP config, tell the user:
+OpenCode does not automatically start OAuth after config is added. OAuth is a required separate step. After adding MCP config, tell the user:
 
 ```text
 Restart OpenCode, then run:
@@ -180,7 +184,7 @@ Do not say `already wired` without explaining the restart and auth steps.
 | Choosing MCP features for user          | Studio decides read-only, feature groups |
 | Calling MCP setup while unauthenticated | Tell user to run `/supabase` first         |
 | Asking user without `question` tool     | Always use `question` tool for confirmations, project selection, any interactive choice |
-| Saying OAuth happens automatically      | OpenCode detects `needs_auth` but does not auto-start browser OAuth; user must run `opencode mcp auth supabase` |
+| Saying OAuth happens automatically      | OAuth is a required separate step: restart OpenCode, run `opencode mcp auth supabase`, complete browser OAuth |
 
 ## Troubleshooting
 

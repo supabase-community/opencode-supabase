@@ -194,7 +194,10 @@ describe("opencode-supabase-guide skill", () => {
     expect(skillContent).toContain("Connect this project to Supabase MCP?");
     expect(skillContent).toContain("Restart OpenCode, then run `opencode mcp auth supabase`.");
     expect(skillContent).toContain("MCP auth may already be cached from an earlier setup.");
-    expect(skillContent).toContain("OAuth will prompt automatically");
-    expect(skillContent).toContain("Already wired");
+    expect(skillContent).toContain("OAuth is a required separate step.");
+    expect(skillContent).toContain("Never tell the user to wait for automatic OAuth.");
+    expect(skillContent).toContain("No file changes needed.");
+    expect(skillContent).not.toContain("OAuth will prompt automatically");
+    expect(skillContent).not.toContain("Already wired");
   });
 });
