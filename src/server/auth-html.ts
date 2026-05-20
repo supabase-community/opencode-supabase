@@ -103,6 +103,8 @@ export const HTML_SUCCESS = `<!doctype html>
       <p>You can <strong>close this window</strong> and return to OpenCode.</p>
       <div class="prompt-label">Try this next:</div>
       <div class="prompt-box">list my Supabase projects</div>
+      <div class="prompt-label">Then try:</div>
+      <div class="prompt-box">connect a project to MCP</div>
       <div class="footer">Having troubles or found a bug?<br><a href="${REPO_URL}" target="_blank" rel="noopener">Report it on GitHub</a></div>
     </div>
     <script>setTimeout(function(){window.close()},2000)</script>

@@ -1544,6 +1544,8 @@ test("auth success html includes a small prompt snippet", () => {
   expect(HTML_SUCCESS).toContain("You can <strong>close this window</strong> and return to OpenCode.");
   expect(HTML_SUCCESS).toContain("Try this next:");
   expect(HTML_SUCCESS).toContain("list my Supabase projects");
+  expect(HTML_SUCCESS).toContain("Then try:");
+  expect(HTML_SUCCESS).toContain("connect a project to MCP");
 });
 
 test("supabase dialog logs auth milestones without leaking oauth query values", async () => {

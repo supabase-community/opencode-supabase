@@ -40,7 +40,7 @@ List my Supabase projects
 
 Pick the project you want to work with, then ask OpenCode to connect Supabase MCP for that project. OpenCode opens Supabase Studio so you can choose MCP permissions and copy the generated OpenCode config.
 
-After OpenCode adds the config, restart OpenCode and authenticate the MCP server:
+After config is added, restart OpenCode and authenticate the MCP server:
 
 ```bash
 opencode mcp auth supabase

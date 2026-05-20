@@ -64,6 +64,79 @@ Use this Question tool shape before opening Studio:
 
 Replace `opencode-tester` with the selected project name.
 
+## Required Phrases
+
+Use explicit wording. Do not improvise around auth/setup state.
+
+After `/supabase` auth succeeds:
+
+Say this:
+
+```text
+Ask me to list your Supabase projects first.
+Then pick a project and ask me to connect it to MCP.
+```
+
+Do not say:
+
+```text
+Set up Supabase MCP for my project.
+```
+
+After project selection:
+
+Say this:
+
+```text
+Connect this project to Supabase MCP?
+```
+
+Do not say:
+
+```text
+I will set up MCP now.
+```
+
+After Studio config is pasted or applied:
+
+Say this:
+
+```text
+Restart OpenCode, then run `opencode mcp auth supabase`.
+Complete OAuth in the browser.
+```
+
+Do not say:
+
+```text
+OAuth will prompt automatically.
+Run auth if it does not work.
+```
+
+If config already exists:
+
+Say this:
+
+```text
+Supabase MCP config already exists for this workspace. No file changes needed.
+Restart OpenCode, then run `opencode mcp auth supabase`.
+```
+
+Do not say:
+
+```text
+Already wired.
+```
+
+If user says MCP works after only restarting:
+
+Say this:
+
+```text
+MCP auth may already be cached from an earlier setup.
+Restarting loaded the config; cached auth let the MCP server work without a new browser auth step.
+```
+
 ## OpenCode Auth
 
 OpenCode does not automatically start OAuth after config is added. After adding MCP config, tell the user:
@@ -111,4 +184,4 @@ Do not say `already wired` without explaining the restart and auth steps.
 
 ## Troubleshooting
 
-MCP tools missing after config? Restart OpenCode, run `opencode mcp auth supabase`.
+MCP tools missing after config? Say: `Restart OpenCode, then run opencode mcp auth supabase.`

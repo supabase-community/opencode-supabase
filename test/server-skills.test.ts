@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import serverModule from "../src/server/index.ts";
 import {
@@ -180,5 +181,20 @@ describe("server config hook", () => {
       ],
       urls: ["https://example.com/.well-known/skills/"],
     });
+  });
+});
+
+describe("opencode-supabase-guide skill", () => {
+  test("documents strict MCP onboarding phrases", () => {
+    const skillContent = readFileSync(path.join(defaultSkillsRoot(), "opencode-supabase-guide", "SKILL.md"), "utf-8");
+
+    expect(skillContent).toContain("Say this:");
+    expect(skillContent).toContain("Do not say:");
+    expect(skillContent).toContain("Ask me to list your Supabase projects first.");
+    expect(skillContent).toContain("Connect this project to Supabase MCP?");
+    expect(skillContent).toContain("Restart OpenCode, then run `opencode mcp auth supabase`.");
+    expect(skillContent).toContain("MCP auth may already be cached from an earlier setup.");
+    expect(skillContent).toContain("OAuth will prompt automatically");
+    expect(skillContent).toContain("Already wired");
   });
 });

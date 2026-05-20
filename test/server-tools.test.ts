@@ -1925,6 +1925,7 @@ describe("server tools auth helper", () => {
     expect(result).toContain("Complete OAuth in the browser.");
     expect(result).not.toContain("if OAuth");
     expect(result).not.toContain("prompted automatically");
+    expect(result).not.toContain("if it does not work");
   });
 
   test("requires Supabase auth before opening MCP setup page", async () => {
