@@ -679,7 +679,8 @@ export function SupabaseDialog(props: SupabaseDialogProps) {
 
   return props.api.ui.DialogAlert({
     title: "Connected to Supabase",
-    message: "Your account is ready. Close this dialog and ask me to list your Supabase projects.",
+    message:
+      "Your account is ready. Close this dialog, ask me to list your Supabase projects, then ask me to connect one to MCP.",
     onConfirm: closeDialog,
   });
 }

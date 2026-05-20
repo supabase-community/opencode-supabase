@@ -391,7 +391,7 @@ test("supabase dialog success closes without inserting an example prompt", async
 
   expect(successDialog.title).toBe("Connected to Supabase");
   expect(successDialog.message).toBe(
-    "Your account is ready. Close this dialog and ask me to list your Supabase projects.",
+    "Your account is ready. Close this dialog, ask me to list your Supabase projects, then ask me to connect one to MCP.",
   );
   expect((successDialog as Record<string, unknown>).onCancel).toBeUndefined();
   expect(api.__test.dialogAlerts).toHaveLength(1);
