@@ -32,25 +32,21 @@ No separate `skills` CLI setup is required. Installing the plugin makes these sk
 
 ## Supabase MCP Onboarding
 
-Ask your agent:
+After connecting Supabase, start by asking OpenCode to list projects:
 
 ```text
-Set up Supabase MCP for my project
+List my Supabase projects
 ```
 
-The agent can explain Supabase MCP, help you choose the target project, and open the Supabase Studio Connect Sheet with the MCP tab and OpenCode client selected.
+Pick the project you want to work with, then ask OpenCode to connect Supabase MCP for that project. OpenCode opens Supabase Studio so you can choose MCP permissions and copy the generated OpenCode config.
 
-Studio remains the source of truth for MCP feature groups, permissions, generated OpenCode config, and auth steps. If you want help applying the Studio output to this repository, paste the Studio prompt or OpenCode config snippet back into OpenCode.
-
-You can skip any Studio instruction to install Supabase Agent Skills separately. This plugin already bundles Supabase skills.
-
-After changing OpenCode MCP config, restart OpenCode. If OAuth is not prompted automatically, run:
+After config is added, restart OpenCode and authenticate the MCP server:
 
 ```bash
 opencode mcp auth supabase
 ```
 
-This plugin opens the MCP setup page and guides the workflow. It does not automatically edit MCP config or choose read-only/feature-group settings for you.
+Complete OAuth in the browser. Skip any `install Supabase Agent Skills` step in Studio; this plugin already bundles the Supabase skills.
 
 ### Disable Bundled Skills
 

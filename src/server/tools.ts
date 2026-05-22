@@ -431,18 +431,25 @@ function createMcpSetupUrl(projectRef: string) {
   return url.toString();
 }
 
-function formatMcpSetupResult(projectRef: string, url: string) {
-  return `Opened Supabase MCP setup for project ${projectRef} in Studio.
-
-URL: ${url}
-
-On the Connect page:
-1. Confirm MCP tab and OpenCode client are selected.
-2. Choose the feature groups and permissions you want in Studio.
-3. Follow the OpenCode config and auth steps shown by Studio.
-4. If you want me to wire this into the current repo, paste the Studio prompt or OpenCode config snippet back here.
-5. You can skip any "install Supabase Agent Skills" step because this plugin already bundles them.
-6. Restart OpenCode after changing config; run \`opencode mcp auth supabase\` if OAuth is not prompted automatically.`;
+function formatMcpSetupResult(url: string) {
+  return [
+    "MCP Connect page is open:",
+    url,
+    "",
+    "Grab config from Supabase Studio:",
+    "1. In Connect -> MCP -> OpenCode, choose permissions.",
+    "2. Copy the generated config under Configure MCP.",
+    "3. Paste the Studio prompt or config snippet back here.",
+    "",
+    "Skip any install Supabase Agent Skills step; this plugin already bundles them.",
+    "",
+    "After adding config:",
+    "1. Close OpenCode or exit the current session.",
+    "2. Run:",
+    "opencode mcp auth supabase",
+    "3. Complete OAuth in the browser.",
+    "4. Start OpenCode again.",
+  ].join("\n")
 }
 
 export function createSupabaseTools(
@@ -551,7 +558,7 @@ export function createSupabaseTools(
     }),
     supabase_open_mcp_setup: tool({
       description:
-        "Open Supabase Studio MCP Connect page for a project after the user confirms the project. Use when the user asks to set up, connect, configure, or use Supabase MCP in OpenCode. Before calling, explain MCP briefly and ask: Open Supabase MCP Connect page for <project name> (<project-ref>)?",
+        "Open Supabase Studio MCP Connect page for a project after the user confirms the project. Use when the user asks to set up, connect, configure, or use Supabase MCP in OpenCode. Before calling, briefly explain that MCP adds project-scoped database, docs, advisor, and management tools. Ask a Question tool confirmation with an Open browser recommended option and a Skip setup option.",
       args: {
         project_ref: tool.schema.string().describe("Supabase project reference ID"),
       },
@@ -566,7 +573,7 @@ export function createSupabaseTools(
           messageID: _context.messageID,
           agent: _context.agent,
         });
-        return formatMcpSetupResult(args.project_ref, url);
+        return formatMcpSetupResult(url);
       },
     }),
     supabase_login: tool({

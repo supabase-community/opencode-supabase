@@ -391,7 +391,7 @@ test("supabase dialog success closes without inserting an example prompt", async
 
   expect(successDialog.title).toBe("Connected to Supabase");
   expect(successDialog.message).toBe(
-    "Your account is ready. Close this dialog and ask me to list your Supabase projects.",
+    "Your account is ready. Close this dialog, ask me to list your Supabase projects, then ask me to connect one to MCP.",
   );
   expect((successDialog as Record<string, unknown>).onCancel).toBeUndefined();
   expect(api.__test.dialogAlerts).toHaveLength(1);
@@ -438,7 +438,7 @@ test("supabase auth success injects ignored onboarding into current session", as
         expect.objectContaining({
           type: "text",
           ignored: true,
-          text: expect.stringContaining("your organizations and projects"),
+          text: expect.stringContaining("organizations and projects"),
         }),
       ],
     }),
@@ -665,7 +665,7 @@ test("supabase already-connected confirm saves onboarding before navigating from
           {
             type: "text",
             ignored: true,
-            text: "Supabase is connected.\n\nNow unlock project-scoped tools with Supabase MCP — ask me to set it up to get database inspection, docs, advisors, and more for your project in OpenCode.\n\nYou can also ask about:\n- your organizations and projects\n- API keys for a project\n- available database regions\n- creating a new project\n\nTry this:\nSet up Supabase MCP for my project",
+            text: "Supabase is connected.\n\nStart by listing your Supabase projects, then connect project-scoped MCP tools for database inspection, docs, advisors, and more in OpenCode.\n\nYou can also ask about:\n- organizations and projects\n- API keys\n- regions\n- creating a new project\n\nTry this:\nList my Supabase projects",
           },
         ],
       },
@@ -1544,6 +1544,8 @@ test("auth success html includes a small prompt snippet", () => {
   expect(HTML_SUCCESS).toContain("You can <strong>close this window</strong> and return to OpenCode.");
   expect(HTML_SUCCESS).toContain("Try this next:");
   expect(HTML_SUCCESS).toContain("list my Supabase projects");
+  expect(HTML_SUCCESS).toContain("Then try:");
+  expect(HTML_SUCCESS).toContain("connect a project to MCP");
 });
 
 test("supabase dialog logs auth milestones without leaking oauth query values", async () => {
