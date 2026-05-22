@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+### Patch Changes
+
+- 35f3b08: Tighten Supabase MCP onboarding copy to guide users from listing projects into MCP connection.
+
 ## 0.3.0
 
 ### Minor Changes
