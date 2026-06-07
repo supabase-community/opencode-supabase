@@ -272,10 +272,8 @@ async function recoverCorruptStoreOnce(path: string, error: unknown, deps: Store
   return recovery;
 }
 
-// Use worktree only when it is non-root and directory is equal to or inside it;
-// otherwise fall back to the session directory.
 function isWindowsPath(value: string): boolean {
-  return /^[a-zA-Z]:[\\/]/.test(value) || value.startsWith("\\\\");
+  return /^[a-zA-Z]:[\\/]/.test(value) || value.startsWith("\\\\") || value.startsWith("//");
 }
 
 function pathApiFor(input: StoreInput): PathApi {
@@ -293,6 +291,8 @@ function isPathRoot(pathApi: PathApi, value: string): boolean {
   return value === pathApi.dirname(value) || value === pathApi.parse(value).root || isExtendedUncRoot(value);
 }
 
+// Use worktree only when it is non-root and directory is equal to or inside it;
+// otherwise fall back to the session directory.
 function resolveStoreRoot(input: StoreInput): { root: string; pathApi: PathApi } {
   const pathApi = pathApiFor(input);
   const directory = pathApi.resolve(input.directory);
