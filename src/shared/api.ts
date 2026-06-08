@@ -1,7 +1,7 @@
 export const DEFAULT_SUPABASE_OAUTH_AUTHORIZE_URL = "https://api.supabase.com/v1/oauth/authorize";
 export const DEFAULT_SUPABASE_API_BASE_URL = "https://api.supabase.com/v1";
-export const DEFAULT_SUPABASE_BROKER_URL = "https://iaoxncwzemnfxcdwakzb.supabase.co/functions/v1/opencode-supabase-broker";
-export const DEFAULT_SUPABASE_OAUTH_CLIENT_ID = "80c76733-1b96-424b-976b-5c2977c72008";
+export const DEFAULT_SUPABASE_BROKER_URL = "https://mujltteqbakexagllqjg.supabase.co/functions/v1/opencode-supabase-broker";
+export const DEFAULT_SUPABASE_OAUTH_CLIENT_ID = "254ee667-f2c8-4c44-b7ad-e48232dcbd44";
 export const DEFAULT_SUPABASE_OAUTH_PORT = 14589;
 
 import type { FetchLike, SupabaseSharedConfig } from "./types.ts";
