@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 
 import {
   DEFAULT_SUPABASE_API_BASE_URL,
+  DEFAULT_SUPABASE_BROKER_URL,
   DEFAULT_SUPABASE_OAUTH_AUTHORIZE_URL,
   DEFAULT_SUPABASE_OAUTH_CLIENT_ID,
   DEFAULT_SUPABASE_OAUTH_PORT,
@@ -95,7 +96,7 @@ describe("shared config", () => {
       {},
     );
 
-    expect(config.brokerBaseUrl).toBe("https://iaoxncwzemnfxcdwakzb.supabase.co/functions/v1/opencode-supabase-broker");
+    expect(config.brokerBaseUrl).toBe(DEFAULT_SUPABASE_BROKER_URL);
   });
 
   test("uses the fixed default oauth port regardless of overrides", () => {
