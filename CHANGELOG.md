@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+
+### Minor Changes
+
+- 3d50f7a: Update default OAuth broker URL and client ID for new Supabase project deployment
+
 ## 0.3.1
 
 ### Patch Changes
