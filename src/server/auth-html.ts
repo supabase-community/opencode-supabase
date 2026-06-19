@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const REPO_URL = "https://github.com/jumski/opencode-supabase";
+const REPO_URL = "https://github.com/supabase-community/opencode-supabase";
 
 const LOGO_SVG = readFileSync(join(__dirname, "assets", "supabase-logo-wordmark--dark.svg"), "utf-8");
 
