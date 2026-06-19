@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1
+
+### Patch Changes
+
+- f71506e: Switch npm publishing to trusted publishing with GitHub OIDC and update repository links for the transferred supabase-community repo.
+
 ## 0.4.0
 
 ### Minor Changes
