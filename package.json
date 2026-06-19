@@ -6,7 +6,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jumski/opencode-supabase.git"
+    "url": "git+https://github.com/supabase-community/opencode-supabase.git"
   },
   "main": "./index.ts",
   "exports": {

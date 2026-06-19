@@ -9,8 +9,7 @@ This repo uses Changesets and a release PR workflow:
 3. `changesets/action` opens or updates a release PR.
 4. Merging the release PR publishes to npm.
 
-Current publish auth uses `NPM_TOKEN` for the initial rollout.
-Target hardening is npm trusted publishing with GitHub OIDC.
+Publish auth uses npm trusted publishing with GitHub OIDC.
 
 This doc also acts as the transfer checklist for moving the repo to `supabase-community`.
 
@@ -29,28 +28,20 @@ This doc also acts as the transfer checklist for moving the repo to `supabase-co
 ### npm
 
 - Ensure the `opencode-supabase` package is owned by the intended npm maintainer or org.
-- Create an npm automation token for publishing.
-- Token requirements on npmjs.com:
-  - token type: `Automation`
-  - access needed: publish rights for the `opencode-supabase` package
-  - 2FA behavior: automation tokens are intended for CI publish flows and work without interactive OTP prompts
-  - package/org alignment: the npm user that creates the token must already be allowed to publish `opencode-supabase`, or the org must grant that permission before release day
-  - if the package is moved to a different npm org later, create a new token from a maintainer account in that org
-- Add the token to GitHub Actions secrets as `NPM_TOKEN`.
-
-Recommended creation checklist in npmjs.com:
-
-1. Sign in as a maintainer that can publish `opencode-supabase`.
-2. Go to Access Tokens.
-3. Create a new `Automation` token.
-4. Store it immediately in GitHub Actions secrets as `NPM_TOKEN`.
-5. Do not reuse a broad personal token if a package-scoped or org-appropriate maintainer token is available.
+- Configure npm Trusted Publisher for `opencode-supabase`:
+  - Provider: `GitHub Actions`
+  - Organization or user: `supabase-community`
+  - Repository: `opencode-supabase`
+  - Workflow filename: `release.yml`
+  - Environment name: leave blank unless GitHub Environment gating is added intentionally
+- Ensure npm publish rights are granted to the final maintainer or org setup before release day.
+- Trusted publishing requires GitHub-hosted runners.
 
 Quick validation before first release:
 
 - confirm the package name on npm is exactly `opencode-supabase`
-- confirm the token-owning npm account can publish that package
-- confirm `NPM_TOKEN` is present in GitHub repository secrets
+- confirm the trusted publisher entry matches `supabase-community/opencode-supabase/.github/workflows/release.yml`
+- confirm the package maintainers can publish that package
 
 ### GitHub
 
@@ -199,39 +190,38 @@ Expected scripts in `package.json`:
 
 ## Security Posture
 
-Current choice: `NPM_TOKEN` with Changesets-only auth
+Current choice: npm trusted publishing with GitHub OIDC
 
-Auth model: `changesets/action` manages npm authentication by creating an ephemeral `.npmrc` from `NPM_TOKEN` only when the workflow reaches the publish path. The `release.yml` workflow does not use `setup-node` `registry-url` and does not map `NODE_AUTH_TOKEN`. No committed `.npmrc` exists in the repo.
+Auth model: `changesets/action` delegates publish auth to npm trusted publishing during the publish path. The release workflow grants `id-token: write`, uses GitHub-hosted runners, and does not inject `NPM_TOKEN` or commit an `.npmrc`.
 
 Why:
 
-- fastest path to the first release
-- simple to configure
-- single auth path: one token, one mechanism
-- good enough for the initial rollout on protected `main`
+- removes the long-lived npm publish secret from GitHub
+- binds publish rights to the exact repo and workflow identity
+- enables npm provenance for public publishes from GitHub Actions
 
 Rules:
 
-- use an npm automation token
-- avoid a broad personal token if possible
-- store it only as the GitHub Actions secret `NPM_TOKEN`
-- do not expose publish secrets to PR workflows
+- keep publish on GitHub-hosted runners
+- keep the trusted publisher entry aligned to the exact owner, repo, and workflow filename
+- do not add token-based npm publish auth back into the workflow unless there is a deliberate rollback
 - publish only from protected `main`
 - keep the release PR merge as the approval gate
 
-Future hardening:
+Optional hardening:
 
-- migrate to npm trusted publishing with GitHub OIDC
-- optionally use a GitHub Environment approval for publish
-- rotate credentials after repo transfer
+- add a GitHub Environment approval for publish if manual gating is needed
+- disable token-based publishing in npm package settings after OIDC is proven in production
 
 ## Failure Handling
 
-### Release workflow fails because `NPM_TOKEN` is missing
+### Release workflow fails to publish with trusted publishing
 
-- A publish attempt will fail inside `changesets/action` if `NPM_TOKEN` is missing or invalid
-- add or fix `NPM_TOKEN` in GitHub repository secrets
-- rerun the failed workflow or push a follow-up commit if needed
+- confirm the repo is `supabase-community/opencode-supabase`
+- confirm npm Trusted Publisher matches the exact workflow filename `release.yml`
+- confirm the job still runs on GitHub-hosted runners
+- confirm workflow permissions still include `id-token: write`
+- rerun the failed workflow after fixing the configuration mismatch
 
 ### PR fails `changeset-check`
 
@@ -262,18 +252,20 @@ Future hardening:
 When the repo moves:
 
 - transfer GitHub repository ownership
+- update `package.json` repository metadata to `git+https://github.com/supabase-community/opencode-supabase.git`
 - verify GitHub Actions remain enabled
 - verify the default branch is still `main`
-- recreate or rotate `NPM_TOKEN`
 - recreate `CHANGESETS_TOKEN` fine-grained PAT (the old token is scoped to the original repo and will not transfer); see [One-Time Setup > GitHub](#github) for required permissions and creation steps
 - recreate required labels if missing:
   - `no-changeset`
 - reapply branch protection rules
 - confirm npm package ownership includes the new maintainers or org
+- configure npm Trusted Publisher for `supabase-community/opencode-supabase/release.yml`
 - verify workflow permissions still allow release PR creation and publish
-- verify `release.yml` auth still works — the workflow relies on `changesets/action` managing `.npmrc` from `NPM_TOKEN`, with no committed `.npmrc` and no `setup-node` `registry-url`
+- verify `release.yml` auth still works with OIDC and no `NPM_TOKEN`
 - run one test release after transfer
-- re-evaluate migration to trusted publishing after transfer
+- remove the GitHub secret `NPM_TOKEN` if it still exists
+- revoke the old npm automation token
 
 Recommended post-transfer label command:
 
@@ -314,8 +306,8 @@ EOF
 ## First Release Checklist
 
 - Changesets setup branch merged
-- `NPM_TOKEN` configured
 - `CHANGESETS_TOKEN` configured
+- npm Trusted Publisher configured for `supabase-community/opencode-supabase/release.yml`
 - `no-changeset` label exists
 - branch protection configured
 - real bugfix PR includes a real changeset
@@ -324,6 +316,7 @@ EOF
 - release PR reviewed
 - release PR merged
 - npm package version confirmed
+- npm provenance confirmed on the published package page
 
 ## Quick Commands
 
