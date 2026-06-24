@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, open, rename, unlink } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, join, posix, win32 } from "node:path";
 import type { PluginInput } from "@opencode-ai/plugin";
 
 import type { SupabaseLogger } from "../shared/log.ts";
@@ -11,6 +11,8 @@ type StoreDeps = {
   now?: () => Date;
   logger?: Pick<SupabaseLogger, "warn">;
 };
+
+type PathApi = typeof posix | typeof win32;
 
 export type SavedAuth = {
   access: string;
@@ -272,31 +274,51 @@ async function recoverCorruptStoreOnce(path: string, error: unknown, deps: Store
 
 // Use worktree only when it is non-root and directory is equal to or inside it;
 // otherwise fall back to the session directory.
-function resolveStoreRoot(input: StoreInput): string {
-  const directory = resolve(input.directory);
+function isWindowsPath(value: string): boolean {
+  return /^[a-zA-Z]:[\\/]/.test(value) || value.startsWith("\\\\") || value.startsWith("//");
+}
+
+function pathApiFor(input: StoreInput): PathApi {
+  if (process.platform === "win32" || isWindowsPath(input.directory) || isWindowsPath(input.worktree ?? "")) {
+    return win32;
+  }
+  return posix;
+}
+
+function isExtendedUncRoot(value: string): boolean {
+  return /^\\\\\?\\UNC\\[^\\]+\\[^\\]+\\?$/.test(value.replace(/\//g, "\\"));
+}
+
+function isPathRoot(pathApi: PathApi, value: string): boolean {
+  return value === pathApi.dirname(value) || value === pathApi.parse(value).root || isExtendedUncRoot(value);
+}
+
+function resolveStoreRoot(input: StoreInput): { root: string; pathApi: PathApi } {
+  const pathApi = pathApiFor(input);
+  const directory = pathApi.resolve(input.directory);
   if (!input.worktree) {
-    return directory;
+    return { root: directory, pathApi };
   }
 
-  const worktree = resolve(input.worktree);
-  if (worktree === dirname(worktree)) {
-    return directory;
+  const worktree = pathApi.resolve(input.worktree);
+  if (isPathRoot(pathApi, worktree)) {
+    return { root: directory, pathApi };
   }
 
-  const pathFromWorktree = relative(worktree, directory);
+  const pathFromWorktree = pathApi.relative(worktree, directory);
   if (
     pathFromWorktree === "" ||
-    (!pathFromWorktree.startsWith("..") && !pathFromWorktree.startsWith(`..${sep}`))
+    (!pathFromWorktree.startsWith("..") && !pathApi.isAbsolute(pathFromWorktree))
   ) {
-    return worktree;
+    return { root: worktree, pathApi };
   }
 
-  return directory;
+  return { root: directory, pathApi };
 }
 
 export function file(input: StoreInput): string {
-  const root = resolveStoreRoot(input);
-  return join(root, ".opencode", STORE_FILE);
+  const { root, pathApi } = resolveStoreRoot(input);
+  return pathApi.join(root, ".opencode", STORE_FILE);
 }
 
 export async function read(input: StoreInput, deps: StoreDeps = {}): Promise<SavedState> {

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, win32 } from "node:path";
 
 import {
   type SavedState,
@@ -469,6 +469,58 @@ describe("server auth store", () => {
 
     expect(getStoreFile({ ...input, worktree: join(input.directory, "nested") })).toBe(
       join(input.directory, ".opencode", "supabase-auth.json"),
+    );
+  });
+
+  test("stores auth under a Windows drive-letter worktree when the directory is inside it", () => {
+    const input = {
+      directory: "C:\\Users\\Peter\\project\\packages\\consumer",
+      worktree: "C:\\Users\\Peter\\project",
+    };
+
+    expect(getStoreFile(input)).toBe(
+      win32.join(input.worktree, ".opencode", "supabase-auth.json"),
+    );
+  });
+
+  test("falls back to the session directory when a Windows drive-letter worktree resolves to root", () => {
+    const input = {
+      directory: "C:\\Users\\Peter\\session",
+      worktree: "C:\\",
+    };
+
+    expect(getStoreFile(input)).toBe(
+      win32.join(input.directory, ".opencode", "supabase-auth.json"),
+    );
+  });
+
+  test("handles Windows UNC worktrees and avoids using the UNC share root", () => {
+    const input = {
+      directory: "\\\\server\\share\\project\\packages\\consumer",
+      worktree: "\\\\server\\share\\project",
+    };
+
+    expect(getStoreFile(input)).toBe(
+      win32.join(input.worktree, ".opencode", "supabase-auth.json"),
+    );
+
+    expect(getStoreFile({ ...input, worktree: "\\\\server\\share" })).toBe(
+      win32.join(input.directory, ".opencode", "supabase-auth.json"),
+    );
+  });
+
+  test("handles Windows extended-length paths and avoids using the extended UNC share root", () => {
+    const input = {
+      directory: "\\\\?\\C:\\Users\\Peter\\project\\packages\\consumer",
+      worktree: "\\\\?\\C:\\Users\\Peter\\project",
+    };
+
+    expect(getStoreFile(input)).toBe(
+      win32.join(input.worktree, ".opencode", "supabase-auth.json"),
+    );
+
+    expect(getStoreFile({ ...input, worktree: "\\\\?\\UNC\\server\\share" })).toBe(
+      win32.join(input.directory, ".opencode", "supabase-auth.json"),
     );
   });
 });
