@@ -275,7 +275,7 @@ async function recoverCorruptStoreOnce(path: string, error: unknown, deps: Store
 // Use worktree only when it is non-root and directory is equal to or inside it;
 // otherwise fall back to the session directory.
 function isWindowsPath(value: string): boolean {
-  return /^[a-zA-Z]:[\\/]/.test(value) || value.startsWith("\\\\") || value.startsWith("//");
+  return /^[a-zA-Z]:[\\/]/.test(value) || value.startsWith("\\\\");
 }
 
 function pathApiFor(input: StoreInput): PathApi {

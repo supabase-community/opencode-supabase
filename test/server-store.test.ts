@@ -523,4 +523,27 @@ describe("server auth store", () => {
       win32.join(input.directory, ".opencode", "supabase-auth.json"),
     );
   });
+
+  test("treats POSIX double-slash paths as POSIX instead of Windows UNC", () => {
+    const input = {
+      directory: "//server/share/project/packages/consumer",
+      worktree: "//server/share/project",
+    };
+
+    // path.posix.resolve collapses the leading double slash to a single slash.
+    expect(getStoreFile(input)).toBe(
+      "/server/share/project/.opencode/supabase-auth.json",
+    );
+  });
+
+  test("treats forward-slash Windows drive-letter paths as Windows paths", () => {
+    const input = {
+      directory: "C:/Users/Peter/project/packages/consumer",
+      worktree: "C:/Users/Peter/project",
+    };
+
+    expect(getStoreFile(input)).toBe(
+      win32.join(input.worktree, ".opencode", "supabase-auth.json"),
+    );
+  });
 });
