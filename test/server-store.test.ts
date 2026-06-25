@@ -526,8 +526,12 @@ describe("server auth store", () => {
       win32.join(input.worktree, ".opencode", "supabase-auth.json"),
     );
 
-    expect(getStoreFile({ ...input, worktree: "\\\\?\\UNC\\server\\share" })).toBe(
-      win32.join(input.directory, ".opencode", "supabase-auth.json"),
+    const uncInput = {
+      directory: "\\\\?\\UNC\\server\\share\\project\\packages\\consumer",
+      worktree: "\\\\?\\UNC\\server\\share",
+    };
+    expect(getStoreFile(uncInput)).toBe(
+      win32.join(uncInput.directory, ".opencode", "supabase-auth.json"),
     );
   });
 
