@@ -16,6 +16,7 @@ on:
 
 jobs:
   core:
+    name: core (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -51,6 +52,18 @@ jobs:
 
       - name: Verify package
         run: bun run verify:pack
+
+  core-required:
+    name: core
+    needs: core
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check core matrix result
+        run: |
+          if [ "${{ needs.core.result }}" != "success" ]; then
+            exit 1
+          fi
 
   changeset-check:
     runs-on: ubuntu-latest
