@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, win32 } from "node:path";
 
 import {
   type SavedState,
@@ -464,11 +464,101 @@ describe("server auth store", () => {
     );
   });
 
+  test("stores auth under the worktree when a child path segment starts with dots", async () => {
+    const input = await createInput();
+    input.directory = join(input.worktree, "..cache", "package");
+
+    expect(getStoreFile(input)).toBe(join(input.worktree, ".opencode", "supabase-auth.json"));
+  });
+
   test("falls back to the session directory when worktree is nested inside the directory", async () => {
     const input = await createInput();
 
     expect(getStoreFile({ ...input, worktree: join(input.directory, "nested") })).toBe(
       join(input.directory, ".opencode", "supabase-auth.json"),
+    );
+  });
+
+  test("stores auth under a Windows drive-letter worktree when the directory is inside it", () => {
+    const input = {
+      directory: "C:\\Users\\Peter\\project\\packages\\consumer",
+      worktree: "C:\\Users\\Peter\\project",
+    };
+
+    expect(getStoreFile(input)).toBe(
+      win32.join(input.worktree, ".opencode", "supabase-auth.json"),
+    );
+  });
+
+  test("falls back to the session directory when a Windows drive-letter worktree resolves to root", () => {
+    const input = {
+      directory: "C:\\Users\\Peter\\session",
+      worktree: "C:\\",
+    };
+
+    expect(getStoreFile(input)).toBe(
+      win32.join(input.directory, ".opencode", "supabase-auth.json"),
+    );
+  });
+
+  test("handles Windows UNC worktrees and avoids using the UNC share root", () => {
+    const input = {
+      directory: "\\\\server\\share\\project\\packages\\consumer",
+      worktree: "\\\\server\\share\\project",
+    };
+
+    expect(getStoreFile(input)).toBe(
+      win32.join(input.worktree, ".opencode", "supabase-auth.json"),
+    );
+
+    expect(getStoreFile({ ...input, worktree: "\\\\server\\share" })).toBe(
+      win32.join(input.directory, ".opencode", "supabase-auth.json"),
+    );
+  });
+
+  test("handles Windows extended-length paths and avoids using the extended UNC share root", () => {
+    const input = {
+      directory: "\\\\?\\C:\\Users\\Peter\\project\\packages\\consumer",
+      worktree: "\\\\?\\C:\\Users\\Peter\\project",
+    };
+
+    expect(getStoreFile(input)).toBe(
+      win32.join(input.worktree, ".opencode", "supabase-auth.json"),
+    );
+
+    const uncInput = {
+      directory: "\\\\?\\UNC\\server\\share\\project\\packages\\consumer",
+      worktree: "\\\\?\\UNC\\server\\share",
+    };
+    expect(getStoreFile(uncInput)).toBe(
+      win32.join(uncInput.directory, ".opencode", "supabase-auth.json"),
+    );
+  });
+
+  test("treats POSIX double-slash paths as POSIX instead of Windows UNC", () => {
+    // On a Windows host pathApiFor always selects win32, so this regression
+    // only asserts the POSIX code path where process.platform !== "win32".
+    if (process.platform === "win32") return;
+
+    const input = {
+      directory: "//server/share/project/packages/consumer",
+      worktree: "//server/share/project",
+    };
+
+    // path.posix.resolve collapses the leading double slash to a single slash.
+    expect(getStoreFile(input)).toBe(
+      "/server/share/project/.opencode/supabase-auth.json",
+    );
+  });
+
+  test("treats forward-slash Windows drive-letter paths as Windows paths", () => {
+    const input = {
+      directory: "C:/Users/Peter/project/packages/consumer",
+      worktree: "C:/Users/Peter/project",
+    };
+
+    expect(getStoreFile(input)).toBe(
+      win32.join(input.worktree, ".opencode", "supabase-auth.json"),
     );
   });
 });

@@ -16,10 +16,22 @@ on:
 
 jobs:
   core:
-    runs-on: ubuntu-latest
+    name: core (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -40,6 +52,18 @@ jobs:
 
       - name: Verify package
         run: bun run verify:pack
+
+  core-required:
+    name: core
+    needs: core
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check core matrix result
+        run: |
+          if [ "${{ needs.core.result }}" != "success" ]; then
+            exit 1
+          fi
 
   changeset-check:
     runs-on: ubuntu-latest
@@ -68,11 +92,23 @@ jobs:
         run: bunx changeset status --since=origin/main
 
   plugin-smoke:
-    runs-on: ubuntu-latest
-    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            shell: bash
+          - os: windows-latest
+            shell: pwsh
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -82,7 +118,9 @@ jobs:
       - name: Install OpenCode
         run: npm i -g opencode-ai@1.4.3
 
-      - name: Smoke plugin install
+      - name: Smoke plugin install (ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
         run: |
           set -euo pipefail
           export HOME="$(mktemp -d)"
@@ -102,3 +140,31 @@ jobs:
           printf 'Smoke spec: %s\n' "$SPEC"
           printf '%s\n' "$CONFIG_JSON" | jq '{plugin, plugin_origins}'
           printf '%s\n' "$CONFIG_JSON" | jq -e --arg spec "$SPEC" '.plugin_origins | any(.spec == $spec and .scope == "local")'
+
+      - name: Smoke plugin install (windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $tempHome = Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
+          New-Item -ItemType Directory -Path $tempHome -Force | Out-Null
+          $env:USERPROFILE = $tempHome
+          $env:APPDATA = Join-Path $tempHome 'AppData/Roaming'
+          $env:LOCALAPPDATA = Join-Path $tempHome 'AppData/Local'
+
+          $tarball = (npm pack --json | ConvertFrom-Json)[0].filename
+          $resolved = (Resolve-Path $tarball).Path -replace '\\','/'
+          $spec = "file:///$resolved"
+
+          $workdir = Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
+          New-Item -ItemType Directory -Path $workdir -Force | Out-Null
+          Set-Location $workdir
+          git init -q
+
+          opencode plugin $spec
+          $config = opencode debug config | ConvertFrom-Json
+          Write-Host "Smoke spec: $spec"
+          $config | Select-Object plugin, plugin_origins | ConvertTo-Json -Depth 10
+          $matched = $config.plugin_origins | Where-Object { $_.spec -eq $spec -and $_.scope -eq 'local' }
+          if (-not $matched) { throw "plugin origin not registered for $spec" }

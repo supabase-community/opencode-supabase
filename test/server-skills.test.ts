@@ -50,29 +50,31 @@ describe("resolveEnabledSupabaseSkills", () => {
 });
 
 describe("registerSupabaseSkillPaths", () => {
+  const skillsRoot = "/plugin/skills";
+
   test("adds selected skill directories", () => {
     const config: { skills?: { paths?: string[] } } = {};
     registerSupabaseSkillPaths(config, undefined, {
-      skillsRoot: "/plugin/skills",
+      skillsRoot,
       exists: () => true,
     });
     expect(config.skills?.paths).toEqual([
-      "/plugin/skills/supabase",
-      "/plugin/skills/supabase-postgres-best-practices",
-      "/plugin/skills/opencode-supabase-guide",
+      path.join(skillsRoot, "supabase"),
+      path.join(skillsRoot, "supabase-postgres-best-practices"),
+      path.join(skillsRoot, "opencode-supabase-guide"),
     ]);
   });
 
   test("does not add duplicate paths", () => {
-    const config = { skills: { paths: ["/plugin/skills/supabase"] } };
+    const config = { skills: { paths: [path.join(skillsRoot, "supabase")] } };
     registerSupabaseSkillPaths(config, undefined, {
-      skillsRoot: "/plugin/skills",
+      skillsRoot,
       exists: () => true,
     });
     expect(config.skills.paths).toEqual([
-      "/plugin/skills/supabase",
-      "/plugin/skills/supabase-postgres-best-practices",
-      "/plugin/skills/opencode-supabase-guide",
+      path.join(skillsRoot, "supabase"),
+      path.join(skillsRoot, "supabase-postgres-best-practices"),
+      path.join(skillsRoot, "opencode-supabase-guide"),
     ]);
   });
 
@@ -85,16 +87,16 @@ describe("registerSupabaseSkillPaths", () => {
     };
 
     registerSupabaseSkillPaths(config, undefined, {
-      skillsRoot: "/plugin/skills",
+      skillsRoot,
       exists: () => true,
     });
 
     expect(config.skills).toEqual({
       paths: [
         "/user/skills",
-        "/plugin/skills/supabase",
-        "/plugin/skills/supabase-postgres-best-practices",
-        "/plugin/skills/opencode-supabase-guide",
+        path.join(skillsRoot, "supabase"),
+        path.join(skillsRoot, "supabase-postgres-best-practices"),
+        path.join(skillsRoot, "opencode-supabase-guide"),
       ],
       urls: ["https://example.com/.well-known/skills/"],
     });
@@ -104,13 +106,13 @@ describe("registerSupabaseSkillPaths", () => {
     const warnings: unknown[] = [];
     const config: { skills?: { paths?: string[] } } = {};
     registerSupabaseSkillPaths(config, undefined, {
-      skillsRoot: "/plugin/skills",
-      exists: (path) => !path.endsWith("postgres-best-practices"),
+      skillsRoot,
+      exists: (p) => !p.endsWith("postgres-best-practices"),
       warn: (_message, data) => warnings.push(data),
     });
     expect(config.skills?.paths).toEqual([
-      "/plugin/skills/supabase",
-      "/plugin/skills/opencode-supabase-guide",
+      path.join(skillsRoot, "supabase"),
+      path.join(skillsRoot, "opencode-supabase-guide"),
     ]);
     expect(warnings).toHaveLength(1);
   });
@@ -120,7 +122,7 @@ describe("registerSupabaseSkillPaths", () => {
     const config: { skills?: unknown } = { skills: false };
 
     registerSupabaseSkillPaths(config, undefined, {
-      skillsRoot: "/plugin/skills",
+      skillsRoot,
       exists: () => true,
       warn: (_message, data) => warnings.push(data),
     });
@@ -134,7 +136,7 @@ describe("registerSupabaseSkillPaths", () => {
     const config = { skills: { paths: "nope" as unknown } };
 
     registerSupabaseSkillPaths(config, undefined, {
-      skillsRoot: "/plugin/skills",
+      skillsRoot,
       exists: () => true,
       warn: (_message, data) => warnings.push(data),
     });
