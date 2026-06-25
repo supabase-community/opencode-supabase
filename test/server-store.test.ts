@@ -525,6 +525,10 @@ describe("server auth store", () => {
   });
 
   test("treats POSIX double-slash paths as POSIX instead of Windows UNC", () => {
+    // On a Windows host pathApiFor always selects win32, so this regression
+    // only asserts the POSIX code path where process.platform !== "win32".
+    if (process.platform === "win32") return;
+
     const input = {
       directory: "//server/share/project/packages/consumer",
       worktree: "//server/share/project",
