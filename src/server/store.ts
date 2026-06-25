@@ -308,7 +308,9 @@ function resolveStoreRoot(input: StoreInput): { root: string; pathApi: PathApi }
   const pathFromWorktree = pathApi.relative(worktree, directory);
   if (
     pathFromWorktree === "" ||
-    (!pathFromWorktree.startsWith("..") && !pathApi.isAbsolute(pathFromWorktree))
+    (pathFromWorktree !== ".." &&
+      !pathFromWorktree.startsWith(`..${pathApi.sep}`) &&
+      !pathApi.isAbsolute(pathFromWorktree))
   ) {
     return { root: worktree, pathApi };
   }

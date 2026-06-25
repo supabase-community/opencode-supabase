@@ -464,6 +464,13 @@ describe("server auth store", () => {
     );
   });
 
+  test("stores auth under the worktree when a child path segment starts with dots", async () => {
+    const input = await createInput();
+    input.directory = join(input.worktree, "..cache", "package");
+
+    expect(getStoreFile(input)).toBe(join(input.worktree, ".opencode", "supabase-auth.json"));
+  });
+
   test("falls back to the session directory when worktree is nested inside the directory", async () => {
     const input = await createInput();
 
