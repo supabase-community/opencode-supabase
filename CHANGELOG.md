@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2
+
+### Patch Changes
+
+- 53ea5a2: Fix Supabase auth store path resolution for Windows drive-letter, UNC, and extended-length paths so credentials are written to the correct project worktree root instead of mixing separators or falling back unexpectedly.
+
 ## 0.4.1
 
 ### Patch Changes
