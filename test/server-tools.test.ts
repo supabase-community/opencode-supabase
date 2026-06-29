@@ -1616,72 +1616,14 @@ describe("server tools auth helper", () => {
     ).rejects.toThrow("Failed to list organizations: 403 nope");
   });
 
-  test("fetches project api keys for a project ref", async () => {
+  test("does not expose project api key retrieval tool", async () => {
     const { input } = await createInput();
-    process.env.OPENCODE_SUPABASE_BROKER_URL = "https://example.com/broker";
-    await writeSavedAuth(input, {
-      access: "saved-access",
-      refresh: "saved-refresh",
-      expires: Date.now() + 60_000,
+    const tools = createSupabaseTools(input, {
+      clientId: "plugin-client",
+      oauthPort: 17677,
     });
 
-    const fetchMock: FetchLike = mock(async (request, init) => {
-      const url = String(request);
-      expect(url).toBe("https://api.supabase.com/v1/projects/proj_123/api-keys");
-      expect(init?.headers).toMatchObject({
-        Authorization: "Bearer saved-access",
-        Accept: "application/json",
-      });
-
-      return new Response(JSON.stringify([{ api_key: "anon-key" }]), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    });
-
-    const tools = createSupabaseTools(
-      input,
-      {
-        clientId: "plugin-client",
-        oauthPort: 17677,
-      },
-      { fetch: fetchMock },
-    );
-
-    const result = await tools.supabase_get_project_api_keys.execute(
-      { project_ref: "proj_123" },
-      createContext(input),
-    );
-
-    expect(result).toContain("anon-key");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
-  test("formats project api key failures clearly", async () => {
-    const { input } = await createInput();
-    process.env.OPENCODE_SUPABASE_BROKER_URL = "https://example.com/broker";
-    await writeSavedAuth(input, {
-      access: "saved-access",
-      refresh: "saved-refresh",
-      expires: Date.now() + 60_000,
-    });
-
-    const fetchMock: FetchLike = mock(async () => {
-      return new Response("missing", { status: 404 });
-    });
-
-    const tools = createSupabaseTools(
-      input,
-      {
-        clientId: "plugin-client",
-        oauthPort: 17678,
-      },
-      { fetch: fetchMock },
-    );
-
-    await expect(
-      tools.supabase_get_project_api_keys.execute({ project_ref: "proj_404" }, createContext(input)),
-    ).rejects.toThrow("Failed to get API keys: 404 missing");
+    expect(Object.hasOwn(tools as Record<string, unknown>, "supabase_get_project_api_keys")).toBe(false);
   });
 
   test("creates a project with default region and generated db password", async () => {

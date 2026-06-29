@@ -26,7 +26,6 @@ Start by listing your Supabase projects, then connect project-scoped MCP tools f
 
 You can also ask about:
 - organizations and projects
-- API keys
 - regions
 - creating a new project
 

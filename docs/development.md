@@ -40,7 +40,6 @@ Current server tools:
 - `supabase_list_organizations`
 - `supabase_list_projects`
 - `supabase_list_regions`
-- `supabase_get_project_api_keys`
 - `supabase_create_project`
 - `supabase_open_mcp_setup`
 - `supabase_login`

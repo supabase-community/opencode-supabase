@@ -24,7 +24,7 @@ Approve Supabase in your browser. Back in OpenCode, start simple:
 List my Supabase projects
 ```
 
-From there you can ask OpenCode to list organizations, list regions, get project API keys, create projects, or connect a project to Supabase MCP.
+From there you can ask OpenCode to list organizations, list regions, create projects, or connect a project to Supabase MCP.
 
 ## Supabase MCP
 
