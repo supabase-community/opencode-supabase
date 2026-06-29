@@ -187,6 +187,20 @@ describe("server config hook", () => {
 });
 
 describe("opencode-supabase-guide skill", () => {
+  test("routes project key requests through Supabase MCP tools", () => {
+    const skillContent = readFileSync(path.join(defaultSkillsRoot(), "opencode-supabase-guide", "SKILL.md"), "utf-8");
+
+    expect(skillContent).toContain("Project Key Requests");
+    expect(skillContent).toContain("get_publishable_keys");
+    expect(skillContent).toContain("*_get_publishable_keys");
+    expect(skillContent).toContain("get_project_url");
+    expect(skillContent).toContain("*_get_project_url");
+    expect(skillContent).toContain("API keys, anon keys, publishable keys, or project URLs");
+    expect(skillContent).toContain("Supabase MCP Development tools");
+    expect(skillContent).toContain("offer MCP setup using the MCP Setup Flow");
+    expect(skillContent).not.toContain("supabase_get_project_api_keys");
+  });
+
   test("documents strict MCP onboarding phrases", () => {
     const skillContent = readFileSync(path.join(defaultSkillsRoot(), "opencode-supabase-guide", "SKILL.md"), "utf-8");
 

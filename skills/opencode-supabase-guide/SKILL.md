@@ -29,6 +29,12 @@ List projects first. Do not lead with MCP setup immediately after `/supabase` au
 
 Supabase MCP adds project-scoped Supabase tools to OpenCode. Before MCP setup, tell user to run `/supabase` to connect their account -- plugin tools (list projects, create project) need OAuth. MCP config comes from Studio prompt, not rebuilt from code.
 
+## Project Key Requests
+
+When user asks for Supabase project API keys, anon keys, publishable keys, or project URLs, first check for Supabase MCP Development tools in available tools. Look for exact tool names `get_publishable_keys` and `get_project_url`, plus OpenCode-prefixed forms such as `*_get_publishable_keys` and `*_get_project_url`.
+
+If relevant MCP tools exist, use them to answer. If no relevant MCP key or URL tool exists, say keys require Supabase MCP Development tools and offer MCP setup using the MCP Setup Flow below. Do not suggest Management API fallback or local config scraping.
+
 ## MCP Setup Flow
 
 1. If user has not chosen a project, call `supabase_list_projects`.
