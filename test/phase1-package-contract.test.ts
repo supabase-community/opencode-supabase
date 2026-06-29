@@ -5,6 +5,7 @@ const packageJson = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 );
 const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+const troubleshooting = readFileSync(new URL("../docs/troubleshooting.md", import.meta.url), "utf8");
 
 describe("phase 1 package contract", () => {
   test("exposes the dual-target exports", () => {
@@ -17,10 +18,10 @@ describe("phase 1 package contract", () => {
 
   test("documents plugin install and debug log capture guidance", () => {
     expect(readme).toContain("opencode plugin opencode-supabase");
-    expect(readme).toContain("collect the newest OpenCode session log");
-    expect(readme).toContain("opencode --log-level DEBUG --print-logs");
-    expect(readme).toContain("~/.local/share/opencode/log/");
-    expect(readme).toContain("%USERPROFILE%\\.local\\share\\opencode\\log");
-    expect(readme).toContain("more reliable than redirecting `stderr` with `2>`");
+    expect(troubleshooting).toContain("collect the newest OpenCode session log");
+    expect(troubleshooting).toContain("opencode --log-level DEBUG --print-logs");
+    expect(troubleshooting).toContain("~/.local/share/opencode/log/");
+    expect(troubleshooting).toContain("%USERPROFILE%\\.local\\share\\opencode\\log");
+    expect(troubleshooting).toContain("more reliable than redirecting `stderr` with `2>`");
   });
 });
