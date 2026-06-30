@@ -35,7 +35,7 @@ function utcTimestamp(date: Date): string {
   const hour = date.getUTCHours().toString().padStart(2, "0");
   const minute = date.getUTCMinutes().toString().padStart(2, "0");
   const second = date.getUTCSeconds().toString().padStart(2, "0");
-  return `${year}${month}${day}T${hour}${minute}${second}Z`;
+  return `${year}${month}${day}t${hour}${minute}${second}z`;
 }
 
 export function makeTimestampedBetaVersion(
@@ -48,6 +48,38 @@ export function makeTimestampedBetaVersion(
     abort(`generated version "${generatedVersion}" is not a -beta.<number> prerelease`);
   }
   return `${match.groups.base}-beta.${utcTimestamp(date)}.sha.g${shortSha}`;
+}
+
+type DistTags = Record<string, string>;
+
+type WaitForBetaDistTagOptions = {
+  expectedBeta: string;
+  expectedLatest: string;
+  readTags: () => Promise<DistTags>;
+  sleep: (ms: number) => Promise<void>;
+  timeoutMs: number;
+  intervalMs: number;
+};
+
+export async function waitForBetaDistTag({
+  expectedBeta,
+  expectedLatest,
+  readTags,
+  sleep,
+  timeoutMs,
+  intervalMs,
+}: WaitForBetaDistTagOptions): Promise<DistTags> {
+  const deadline = Date.now() + timeoutMs;
+  let tags = await readTags();
+  while (tags.beta !== expectedBeta && tags.latest === expectedLatest && Date.now() < deadline) {
+    await sleep(intervalMs);
+    tags = await readTags();
+  }
+  return tags;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function npmDistTags(): Promise<Record<string, string>> {
@@ -150,6 +182,14 @@ async function main() {
           }; probe error: ${probeErr instanceof Error ? probeErr.message : String(probeErr)}`,
         );
       }
+      probed = await waitForBetaDistTag({
+        expectedBeta: newVersion,
+        expectedLatest: latestBefore,
+        readTags: npmDistTags,
+        sleep,
+        timeoutMs: 90_000,
+        intervalMs: 5_000,
+      });
       const betaOk = probed.beta === newVersion;
       const latestOk = probed.latest === latestBefore;
       const publishErrMsg = publishErr instanceof Error ? publishErr.message : String(publishErr);
@@ -173,7 +213,14 @@ async function main() {
       );
     }
 
-    const afterTags = await npmDistTags();
+    const afterTags = await waitForBetaDistTag({
+      expectedBeta: newVersion,
+      expectedLatest: latestBefore,
+      readTags: npmDistTags,
+      sleep,
+      timeoutMs: 90_000,
+      intervalMs: 5_000,
+    });
     console.log(`\nnpm latest after:  ${afterTags.latest}`);
     console.log(`npm beta after:    ${afterTags.beta}`);
 
