@@ -318,6 +318,65 @@ EOF
 - npm package version confirmed
 - npm provenance confirmed on the published package page
 
+## Beta prerelease
+
+For local-dev beta smoke before a stable release. Uses Changesets prerelease mode under the npm `beta` dist-tag, scoped to a throwaway git worktree so the main working copy is never mutated.
+
+```bash
+bun run release:beta
+```
+
+What the script does:
+
+1. Refuses to run in CI or without an interactive TTY.
+2. Refuses to run if the working copy is dirty.
+3. Snapshots npm `latest` and aborts if it is not a stable version.
+4. Creates a detached git worktree off `HEAD`.
+5. In the worktree: `bun install`, `changeset pre enter beta`, `version-packages`, then `lint`, `typecheck`, `test`, `verify:pack`.
+6. Aborts if the generated version is not a `-beta.*` prerelease.
+7. Requires typing `publish beta` before publishing.
+8. Publishes with `changeset publish --no-git-tag` (no commit, no push, no git tag).
+9. Verifies npm `latest` is unchanged and `beta` points at the new version.
+10. Removes the temp worktree.
+
+Expected npm state after a successful run:
+
+```json
+{
+  "latest": "0.4.2",
+  "beta": "0.5.0-beta.0"
+}
+```
+
+Install the beta to smoke test:
+
+```bash
+npm install opencode-supabase@beta
+```
+
+### Revert
+
+The main working copy is never touched, so no local revert is needed. If cleanup fails:
+
+```bash
+git worktree prune
+```
+
+If npm tags are wrong after publish, fix them with:
+
+```bash
+npm dist-tag add opencode-supabase@<stable> latest
+npm dist-tag add opencode-supabase@<beta> beta
+```
+
+npm publishes are irreversible. To hide a bad beta, deprecate it:
+
+```bash
+npm deprecate opencode-supabase@0.5.0-beta.0 "Bad beta; use latest stable"
+```
+
+After beta smoke passes, publish stable through the normal release PR workflow. The main repo never enters prerelease mode (the temp worktree did), so pending changesets in `main` are still consumed by the Changesets release PR. Do not run `bun run release` directly for the stable release; let the release PR handle it.
+
 ## Quick Commands
 
 Create changeset:

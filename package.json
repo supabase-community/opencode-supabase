@@ -31,7 +31,8 @@
     "test": "bun test --preload @opentui/solid/preload",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "changeset publish"
+    "release": "changeset publish",
+    "release:beta": "bun scripts/release-beta.ts"
   },
   "dependencies": {
     "@opencode-ai/plugin": "latest",
