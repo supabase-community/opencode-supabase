@@ -665,7 +665,7 @@ test("supabase already-connected confirm saves onboarding before navigating from
           {
             type: "text",
             ignored: true,
-            text: "Supabase is connected.\n\nStart by listing your Supabase projects, then connect project-scoped MCP tools for database inspection, docs, advisors, and more in OpenCode.\n\nYou can also ask about:\n- organizations and projects\n- API keys\n- regions\n- creating a new project\n\nTry this:\nList my Supabase projects",
+            text: "Supabase is connected.\n\nStart by listing your Supabase projects, then connect project-scoped MCP tools for database inspection, docs, advisors, and more in OpenCode.\n\nYou can also ask about:\n- organizations and projects\n- regions\n- creating a new project\n\nTry this:\nList my Supabase projects",
           },
         ],
       },

@@ -50,7 +50,6 @@ This branch provides functional OAuth plumbing and broker integration. The items
 - `supabase_list_organizations`
 - `supabase_list_projects`
 - `supabase_create_project`
-- `supabase_get_project_api_keys`
 
 **Reference:** PLAN.md Task 9
 

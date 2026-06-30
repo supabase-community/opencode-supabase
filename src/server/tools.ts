@@ -505,23 +505,6 @@ export function createSupabaseTools(
         );
       },
     }),
-    supabase_get_project_api_keys: tool({
-      description: "Get the API keys for a Supabase project.",
-      args: {
-        project_ref: tool.schema.string().describe("Project reference ID"),
-      },
-      async execute(args, _context: SupabaseToolContext) {
-        return executeSupabaseGet(
-          input,
-          options,
-          deps,
-          "supabase_get_project_api_keys",
-          _context,
-          `/projects/${args.project_ref}/api-keys`,
-          "get API keys",
-        );
-      },
-    }),
     supabase_create_project: tool({
       description: "Create a new Supabase project in an organization.",
       args: {

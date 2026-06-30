@@ -141,6 +141,11 @@ jobs:
           printf '%s\n' "$CONFIG_JSON" | jq '{plugin, plugin_origins}'
           printf '%s\n' "$CONFIG_JSON" | jq -e --arg spec "$SPEC" '.plugin_origins | any(.spec == $spec and .scope == "local")'
 
+          CONSUMER_DIR="$(mktemp -d)"
+          cd "$CONSUMER_DIR"
+          npm install "$SPEC"
+          bun --preload @opentui/solid/preload -e 'await import("opencode-supabase/server"); await import("opencode-supabase/tui"); console.log("packed imports ok")'
+
       - name: Smoke plugin install (windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
@@ -168,3 +173,9 @@ jobs:
           $config | Select-Object plugin, plugin_origins | ConvertTo-Json -Depth 10
           $matched = $config.plugin_origins | Where-Object { $_.spec -eq $spec -and $_.scope -eq 'local' }
           if (-not $matched) { throw "plugin origin not registered for $spec" }
+
+          $consumer = Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
+          New-Item -ItemType Directory -Path $consumer -Force | Out-Null
+          Set-Location $consumer
+          npm install $spec
+          bun --preload @opentui/solid/preload -e "await import('opencode-supabase/server'); await import('opencode-supabase/tui'); console.log('packed imports ok')"
