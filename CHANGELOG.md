@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.0
+
+### Minor Changes
+
+- 398f393: Remove the `supabase_get_project_api_keys` tool from the public tool surface.
+
+### Patch Changes
+
+- 398f393: Declare OpenTUI and Solid as runtime dependencies so clean package installs can load the TUI export.
+- 4a044e3: Broaden the OpenCode Supabase guide skill triggers so Supabase project, key, URL, `/supabase`, and exact MCP connection prompts load the guide reliably.
+- 398f393: Add clean packed-package import smoke coverage for the server and TUI plugin exports.
+
 ## 0.4.2
 
 ### Patch Changes
