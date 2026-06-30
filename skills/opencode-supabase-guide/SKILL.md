@@ -1,6 +1,6 @@
 ---
 name: opencode-supabase-guide
-description: Use when users ask to set up Supabase MCP in OpenCode, connect project to MCP, connect a project to MCP, connect MCP, conenct MCP, connect MCP server, connect Supabase MCP, paste Supabase Studio MCP config, or need MCP tools connected.
+description: Use when users ask about Supabase in OpenCode, including listing or choosing projects, project refs, API/anon/publishable/secret keys, project URLs, /supabase auth flow, exact prompts like connect a project to MCP or connect project to MCP, Supabase MCP tools, MCP setup/connect/config, or Studio MCP config prompts.
 ---
 
 # OpenCode Supabase Guide

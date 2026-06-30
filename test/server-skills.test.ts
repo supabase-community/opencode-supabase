@@ -187,6 +187,23 @@ describe("server config hook", () => {
 });
 
 describe("opencode-supabase-guide skill", () => {
+  test("description triggers for broad Supabase-in-OpenCode requests", () => {
+    const skillContent = readFileSync(path.join(defaultSkillsRoot(), "opencode-supabase-guide", "SKILL.md"), "utf-8");
+    const description = skillContent.match(/^description: (.+)$/m)?.[1] ?? "";
+
+    expect(description).toContain("Supabase in OpenCode");
+    expect(description).toContain("listing or choosing projects");
+    expect(description).toContain("project refs");
+    expect(description).toContain("API/anon/publishable/secret keys");
+    expect(description).toContain("project URLs");
+    expect(description).toContain("Supabase MCP tools");
+    expect(description).toContain("MCP setup/connect/config");
+    expect(description).toContain("Studio MCP config prompts");
+    expect(description).toContain("/supabase auth flow");
+    expect(description).toContain("connect a project to MCP");
+    expect(description).toContain("connect project to MCP");
+  });
+
   test("routes project key requests through Supabase MCP tools", () => {
     const skillContent = readFileSync(path.join(defaultSkillsRoot(), "opencode-supabase-guide", "SKILL.md"), "utf-8");
 
