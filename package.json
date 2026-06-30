@@ -1,6 +1,6 @@
 {
   "name": "opencode-supabase",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "type": "module",
   "description": "OpenCode plugin for Supabase integration with server and TUI components",
   "license": "Apache-2.0",
