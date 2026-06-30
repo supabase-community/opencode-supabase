@@ -28,6 +28,28 @@ function abort(message: string): never {
   throw new ReleaseBetaError(message);
 }
 
+function utcTimestamp(date: Date): string {
+  const year = date.getUTCFullYear().toString().padStart(4, "0");
+  const month = (date.getUTCMonth() + 1).toString().padStart(2, "0");
+  const day = date.getUTCDate().toString().padStart(2, "0");
+  const hour = date.getUTCHours().toString().padStart(2, "0");
+  const minute = date.getUTCMinutes().toString().padStart(2, "0");
+  const second = date.getUTCSeconds().toString().padStart(2, "0");
+  return `${year}${month}${day}T${hour}${minute}${second}Z`;
+}
+
+export function makeTimestampedBetaVersion(
+  generatedVersion: string,
+  date: Date,
+  shortSha: string,
+): string {
+  const match = /^(?<base>\d+\.\d+\.\d+)-beta\.\d+$/.exec(generatedVersion);
+  if (!match?.groups?.base) {
+    abort(`generated version "${generatedVersion}" is not a -beta.<number> prerelease`);
+  }
+  return `${match.groups.base}-beta.${utcTimestamp(date)}.sha.g${shortSha}`;
+}
+
 async function npmDistTags(): Promise<Record<string, string>> {
   const out = await $`npm view ${PACKAGE_NAME} dist-tags --json --silent`.text();
   return JSON.parse(out) as Record<string, string>;
@@ -86,12 +108,19 @@ async function main() {
     console.log("— version-packages");
     await $`bun run version-packages`.cwd(tmp).quiet();
 
-    const pkg = JSON.parse(await Bun.file(`${tmp}/package.json`).text()) as { version: string };
-    const newVersion = pkg.version;
-    console.log(`generated version: ${newVersion}`);
+    const packageJsonFile = Bun.file(`${tmp}/package.json`);
+    const pkg = JSON.parse(await packageJsonFile.text()) as { version: string };
+    const generatedVersion = pkg.version;
+    console.log(`generated version: ${generatedVersion}`);
 
-    if (!/-beta\.\d+$/.test(newVersion)) {
-      abort(`generated version "${newVersion}" is not a -beta.* prerelease; aborting`);
+    const shortSha = (await $`git rev-parse --short=12 HEAD`.cwd(tmp).text()).trim();
+    const newVersion = makeTimestampedBetaVersion(generatedVersion, new Date(), shortSha);
+    pkg.version = newVersion;
+    await Bun.write(`${tmp}/package.json`, `${JSON.stringify(pkg, null, 2)}\n`);
+    console.log(`timestamped beta version: ${newVersion}`);
+
+    if (beforeTags.beta === newVersion) {
+      abort(`npm beta already points at ${newVersion}; bump prerelease before publishing`);
     }
 
     await runVerify(tmp);
@@ -185,14 +214,16 @@ async function main() {
   }
 }
 
-try {
-  await main();
-} catch (err) {
-  if (err instanceof ReleaseBetaError) {
-    console.error(`release:beta: ${err.message}`);
-  } else {
-    console.error("\nrelease:beta: unexpected failure:");
-    console.error(err instanceof Error ? err.message : String(err));
+if (import.meta.main) {
+  try {
+    await main();
+  } catch (err) {
+    if (err instanceof ReleaseBetaError) {
+      console.error(`release:beta: ${err.message}`);
+    } else {
+      console.error("\nrelease:beta: unexpected failure:");
+      console.error(err instanceof Error ? err.message : String(err));
+    }
+    process.exitCode = 1;
   }
-  process.exitCode = 1;
 }
