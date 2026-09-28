@@ -33,6 +33,15 @@ function firstAuthMethod(auth: ReturnType<typeof createSupabaseAuth>) {
   return method;
 }
 
+function toolInputFor(input: Awaited<ReturnType<typeof createInput>>) {
+  return {
+    client: input.client,
+    directory: input.directory,
+    worktree: input.worktree,
+    clearHostAuth: mock(async () => undefined),
+  };
+}
+
 function secondAuthMethod(auth: ReturnType<typeof createSupabaseAuth>) {
   const method = auth.methods[1];
   if (!method) throw new Error("Expected a status auth method");
@@ -140,7 +149,9 @@ describe("server auth hook", () => {
       expires: Date.now() + 60_000,
     });
 
-    const auth = createSupabaseAuth(input as never);
+    const auth = createSupabaseAuth(input as never, undefined, {
+      toolInput: toolInputFor(input) as never,
+    });
     const result = await secondAuthMethod(auth).authorize({ action: "disconnect" });
 
     expect(JSON.parse(result.instructions)).toEqual({
@@ -177,6 +188,7 @@ describe("server auth hook", () => {
             },
           ),
         ) as never,
+        toolInput: toolInputFor(input) as never,
       },
     );
 

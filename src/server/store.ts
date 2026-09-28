@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, open, rename, unlink } from "node:fs/promises";
 import { dirname, join, posix, win32 } from "node:path";
-import type { PluginInput } from "@opencode-ai/plugin";
+import type { PluginInput } from "../shared/plugin-compat.ts";
 
 import type { SupabaseLogger } from "../shared/log.ts";
 

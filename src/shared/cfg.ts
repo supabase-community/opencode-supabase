@@ -1,4 +1,4 @@
-import type { PluginOptions } from "@opencode-ai/plugin";
+import type { PluginOptions } from "./plugin-compat.ts";
 
 import {
   DEFAULT_SUPABASE_API_BASE_URL,

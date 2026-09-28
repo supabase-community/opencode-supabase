@@ -1,6 +1,3 @@
-import type { PluginOptions } from "@opencode-ai/plugin";
-import { tool } from "@opencode-ai/plugin";
-import type { ToolContext } from "@opencode-ai/plugin/tool";
 import open from "open";
 
 import { supabaseManagementApiFetch } from "../shared/api.ts";
@@ -10,6 +7,7 @@ import {
 } from "../shared/broker.ts";
 import { readSupabaseConfig } from "../shared/cfg.ts";
 import type { SupabaseLogger } from "../shared/log.ts";
+import { type PluginOptions, tool } from "../shared/plugin-compat.ts";
 import type { FetchLike } from "../shared/types.ts";
 import {
   type SavedAuth,
@@ -51,14 +49,18 @@ export type SupabaseToolInput = {
     auth: HostAuthWriter;
   };
   directory: string;
-  serverUrl: URL;
   worktree: string;
+  // V2 replacement for the V1 `DELETE /auth/supabase` host endpoint.
+  clearHostAuth: () => Promise<void>;
 };
 
-type SupabaseToolContext = Pick<
-  ToolContext,
-  "directory" | "worktree" | "abort" | "sessionID" | "messageID" | "agent" | "metadata" | "ask"
->;
+// V2 tool executors receive a different context shape than V1 `ToolContext`;
+// only the fields used for logging are declared, and all are optional.
+type SupabaseToolContext = {
+  sessionID?: string;
+  messageID?: string;
+  agent?: string;
+};
 
 export type SupabaseAuthStatus =
   | {
@@ -86,9 +88,8 @@ function formatAuthNoticeForTool(notice: SavedStateNotice) {
 }
 
 async function throwAuthNotice(input: SupabaseToolInput, notice: SavedStateNotice, deps: ToolDeps): Promise<never> {
-  const fetchImpl = deps.fetch ?? fetch;
   try {
-    await clearHostAuth(input, fetchImpl);
+    await input.clearHostAuth();
   } catch {}
   throw new Error(formatAuthNoticeForTool(notice));
 }
@@ -209,17 +210,6 @@ async function setHostAuth(
   });
 }
 
-async function clearHostAuth(
-  input: Pick<SupabaseToolInput, "directory" | "serverUrl">,
-  fetchImpl: FetchLike,
-) {
-  const url = new URL(`/auth/supabase?directory=${encodeURIComponent(input.directory)}`, input.serverUrl);
-  const response = await fetchImpl(url.toString(), { method: "DELETE" });
-  if (!response.ok) {
-    throw new Error(`Failed to clear host auth: ${response.status}`);
-  }
-}
-
 async function syncHostAuthForDirectory(entry: InFlightRefresh, input: SupabaseToolInput, auth: SavedAuth) {
   if (entry.syncedDirectories.has(input.directory)) {
     return;
@@ -246,11 +236,11 @@ export async function disconnectSupabaseAuth(
   input: SupabaseToolInput,
   deps: Pick<ToolDeps, "fetch"> = {},
 ) {
-  const fetchImpl = deps.fetch ?? fetch;
+  void deps;
   await clearSavedAuth(input);
   inFlightRefreshes.delete(getStoreFile(input));
   try {
-    await clearHostAuth(input, fetchImpl);
+    await input.clearHostAuth();
   } catch {}
 }
 
@@ -304,7 +294,6 @@ export async function ensureSupabaseToolAuth(
 
   const inFlight = inFlightRefreshes.get(refreshKey);
   if (inFlight) {
-    const fetchImpl = deps.fetch ?? fetch;
     try {
       const auth = await inFlight.promise;
       await syncHostAuthForDirectory(inFlight, input, auth);
@@ -312,13 +301,13 @@ export async function ensureSupabaseToolAuth(
     } catch (error) {
       if ((error instanceof Error ? error.message : String(error)) === NOT_CONNECTED_MESSAGE) {
         try {
-          await clearHostAuth(input, fetchImpl);
+          await input.clearHostAuth();
         } catch {}
       } else {
         const latest = await readSavedAuth(input, { logger: deps.logger, now: deps.now });
         if (!latest.auth && latest.notice) {
           try {
-            await clearHostAuth(input, fetchImpl);
+            await input.clearHostAuth();
           } catch {}
         }
       }
@@ -339,7 +328,6 @@ export async function ensureSupabaseToolAuth(
     syncPromises: new Map<string, Promise<void>>(),
   };
   const refreshPromise = (async () => {
-    const fetchImpl = deps.fetch ?? fetch;
     const current = await readSavedAuth(input, { logger: deps.logger, now: deps.now });
     if (!current.auth) {
       if (current.notice) {
@@ -398,7 +386,7 @@ export async function ensureSupabaseToolAuth(
         if (error.code === "unauthorized") {
           await clearSavedAuth(input);
           try {
-            await clearHostAuth(input, fetchImpl);
+            await input.clearHostAuth();
           } catch {}
           throw new Error(NOT_CONNECTED_MESSAGE);
         }
@@ -563,7 +551,7 @@ export function createSupabaseTools(
       description: "Explain how to connect Supabase in the TUI.",
       args: {},
       async execute(_args, _context: SupabaseToolContext) {
-        return "Supabase login must be completed in the TUI. Run /supabase first.";
+        return "Supabase login must be completed through the Supabase integration. Connect it from the integrations UI, then retry this tool.";
       },
     }),
   };
