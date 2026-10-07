@@ -2,10 +2,10 @@
   "source_repo": "supabase/agent-skills",
   "source_release": null,
   "source_version": null,
-  "source_commit": "1356046015476711a769601079262b5635929427",
-  "source_ref": "main",
-  "source_ref_type": "default_branch",
-  "synced_at": "2026-06-29T20:31:42Z",
+  "source_commit": "544bfc56c89afe2b87b20017a59b2c6e9502a1fb",
+  "source_ref": "v0.1.9",
+  "source_ref_type": "explicit",
+  "synced_at": "2026-10-07T07:12:06Z",
   "managed_paths": [
     "skills/supabase",
     "skills/supabase-postgres-best-practices"
