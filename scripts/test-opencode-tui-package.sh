@@ -52,6 +52,15 @@ diagnostics() {
   tmux -S "$SOCKET" kill-session -t "$SESSION" 2>/dev/null || true
   tmux -S "$SOCKET" kill-server 2>/dev/null || true
   rm -f "$SOCKET"
+  # OpenCode caches the installed plugin under
+  # <XDG_CACHE_HOME>/opencode/packages/<raw spec>, and the spec is
+  # `file:<tarball>` — so the cache tree contains a `file:` directory.
+  # upload-artifact@v4 rejects ':' in any uploaded path (every canary and the
+  # 2026-07-23 main CI diagnostics upload failed on it). The same trees plus
+  # npm's cacache and the host's dependency installs are also >100MB of
+  # non-diagnostic junk. All evidence files (pane, logs, metadata, tarball,
+  # lockfiles) live outside these trees, so drop them before evidence upload.
+  rm -rf "$ARTIFACT_DIR/cache/opencode/packages" "$ARTIFACT_DIR/npm/cache" "$ARTIFACT_DIR/config/opencode/node_modules" "$ARTIFACT_DIR/work/.opencode/node_modules" "$ARTIFACT_DIR/tmp"
 }
 trap diagnostics EXIT
 trap 'exit 130' INT
