@@ -19,8 +19,16 @@ touch "$ARTIFACT_DIR/npm/config/userconfig" "$ARTIFACT_DIR/npm/config/globalconf
 chmod 700 "$ARTIFACT_DIR/runtime"
 cd "$ARTIFACT_DIR"
 
+# OpenCode V2 (@opencode/cli): different install + background-service model.
+OPENCODE_MAJOR="$("$OPENCODE_BIN" --version 2>/dev/null | grep -oE '[0-9]+' | head -1 || true)"
+
 diagnostics() {
   tmux -S "$SOCKET" capture-pane -p -t "$SESSION" -S - >"$ARTIFACT_DIR/pane.txt" 2>/dev/null || true
+  # V2 leaves a managed `opencode serve --service` daemon behind (fixed default
+  # port); stop it so it cannot poison a later run on the same host.
+  if [[ "${OPENCODE_MAJOR:-0}" -ge 2 ]]; then
+    timeout 20 "${clean_env[@]}" "$OPENCODE_BIN" service stop >/dev/null 2>&1 || true
+  fi
   "$OPENCODE_BIN" --version >"$ARTIFACT_DIR/opencode-version.txt" 2>&1 || true
   if [[ -n "${TARBALL:-}" && -f "$TARBALL" ]]; then
     sha256sum "$TARBALL" >"$ARTIFACT_DIR/tarball.sha256"
@@ -144,22 +152,47 @@ clean_env=(
 )
 
 [[ ! -e "$ARTIFACT_DIR/home/.opencode" ]]
-if ! (
-  cd "$ARTIFACT_DIR/work"
-  timeout 180 "${clean_env[@]}" "$OPENCODE_BIN" plugin "file:$TARBALL" --print-logs --log-level DEBUG
-) >"$ARTIFACT_DIR/install.stdout" 2>"$ARTIFACT_DIR/install.stderr"; then
-  printf 'opencode plugin install failed or timed out\n' >&2
-  exit 1
-fi
+if [[ "${OPENCODE_MAJOR:-0}" -ge 2 ]]; then
+  # V2: `opencode plugin add` is an interactive TUI wizard (hangs non-interactively),
+  # so register the plugin the way V2 reads it: project .opencode/opencode.json
+  # plugin array (verified with `opencode debug config`). No tui.json in V2.
+  mkdir -p "$ARTIFACT_DIR/work/.opencode"
+  jq -n --arg spec "file:$TARBALL" '{plugin:[$spec]}' >"$ARTIFACT_DIR/work/.opencode/opencode.json"
+  printf 'Registered V2 plugin config: %s\n' "$(cat "$ARTIFACT_DIR/work/.opencode/opencode.json")" >"$ARTIFACT_DIR/install.stdout"
+else
+  if ! (
+    cd "$ARTIFACT_DIR/work"
+    timeout 180 "${clean_env[@]}" "$OPENCODE_BIN" plugin "file:$TARBALL" --print-logs --log-level DEBUG
+  ) >"$ARTIFACT_DIR/install.stdout" 2>"$ARTIFACT_DIR/install.stderr"; then
+    printf 'opencode plugin install failed or timed out\n' >&2
+    exit 1
+  fi
 
-grep -q 'Plugin package ready' "$ARTIFACT_DIR/install.stdout"
-for metadata in opencode.json tui.json; do
+  grep -q 'Plugin package ready' "$ARTIFACT_DIR/install.stdout"
+fi
+metadata_files=(opencode.json)
+[[ "${OPENCODE_MAJOR:-0}" -lt 2 ]] && metadata_files+=(tui.json)
+for metadata in "${metadata_files[@]}"; do
   jq -e --arg spec "file:$TARBALL" '.plugin == [$spec]' "$ARTIFACT_DIR/work/.opencode/$metadata" >/dev/null
 done
 
+if [[ "${OPENCODE_MAJOR:-0}" -ge 2 ]]; then
+  # V2 spawns a managed `opencode serve --service` daemon on a fixed default
+  # port; give this isolated run a random port so leftover daemons on a shared
+  # host cannot collide (the port setting lives in this run's XDG state).
+  SERVICE_PORT=$(shuf -i 20000-60000 -n 1)
+  if ! timeout 60 "${clean_env[@]}" "$OPENCODE_BIN" service set port "$SERVICE_PORT" >"$ARTIFACT_DIR/service-port.stdout" 2>"$ARTIFACT_DIR/service-port.stderr"; then
+    printf 'opencode service set port failed\n' >&2
+    exit 1
+  fi
+fi
+
+# V2 accepts only lowercase log levels (all|trace|debug|…); V1 used DEBUG.
+LOG_LEVEL="DEBUG"
+[[ "${OPENCODE_MAJOR:-0}" -ge 2 ]] && LOG_LEVEL="debug"
 cat >"$ARTIFACT_DIR/launch.sh" <<EOF
 #!/bin/sh
-exec env -i PATH="$PATH" HOME="$ARTIFACT_DIR/home" USER="${USER:-$(id -un)}" LOGNAME="${LOGNAME:-${USER:-$(id -un)}}" TMPDIR="$ARTIFACT_DIR/tmp" NPM_CONFIG_CACHE="$ARTIFACT_DIR/npm/cache" NPM_CONFIG_USERCONFIG="$ARTIFACT_DIR/npm/config/userconfig" NPM_CONFIG_GLOBALCONFIG="$ARTIFACT_DIR/npm/config/globalconfig" NPM_CONFIG_IGNORE_SCRIPTS=false OPENCODE_DISABLE_AUTOUPDATE=1 XDG_CONFIG_HOME="$ARTIFACT_DIR/config" XDG_DATA_HOME="$ARTIFACT_DIR/data" XDG_CACHE_HOME="$ARTIFACT_DIR/cache" XDG_STATE_HOME="$ARTIFACT_DIR/state" XDG_RUNTIME_DIR="$ARTIFACT_DIR/runtime" XDG_CONFIG_DIRS="$ARTIFACT_DIR/config-dirs" XDG_DATA_DIRS="$ARTIFACT_DIR/data-dirs" TERM=xterm-256color "$OPENCODE_BIN" --print-logs --log-level DEBUG 2>"$ARTIFACT_DIR/tui.stderr"
+exec env -i PATH="$PATH" HOME="$ARTIFACT_DIR/home" USER="${USER:-$(id -un)}" LOGNAME="${LOGNAME:-${USER:-$(id -un)}}" TMPDIR="$ARTIFACT_DIR/tmp" NPM_CONFIG_CACHE="$ARTIFACT_DIR/npm/cache" NPM_CONFIG_USERCONFIG="$ARTIFACT_DIR/npm/config/userconfig" NPM_CONFIG_GLOBALCONFIG="$ARTIFACT_DIR/npm/config/globalconfig" NPM_CONFIG_IGNORE_SCRIPTS=false OPENCODE_DISABLE_AUTOUPDATE=1 XDG_CONFIG_HOME="$ARTIFACT_DIR/config" XDG_DATA_HOME="$ARTIFACT_DIR/data" XDG_CACHE_HOME="$ARTIFACT_DIR/cache" XDG_STATE_HOME="$ARTIFACT_DIR/state" XDG_RUNTIME_DIR="$ARTIFACT_DIR/runtime" XDG_CONFIG_DIRS="$ARTIFACT_DIR/config-dirs" XDG_DATA_DIRS="$ARTIFACT_DIR/data-dirs" TERM=xterm-256color "$OPENCODE_BIN" --print-logs --log-level $LOG_LEVEL 2>"$ARTIFACT_DIR/tui.stderr"
 EOF
 chmod +x "$ARTIFACT_DIR/launch.sh"
 
