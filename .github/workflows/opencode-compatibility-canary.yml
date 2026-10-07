@@ -2,8 +2,10 @@
 # pull requests and is never a required check.
 #
 # Schedule: last 2 minor lines × latest 2 patches each.
-# Manual dispatch (workflow_dispatch): test a single custom version or dist-tag
-# (e.g. beta, 0.0.0-beta-202607201938, 2.0.0-beta.1 when it exists).
+# Manual dispatch (workflow_dispatch): test a single custom specifier — a
+# bare version or dist-tag means opencode-ai (e.g. beta, 0.0.0-beta-202607201938,
+# 1.18.35); a full npm specifier selects any package, e.g. @opencode/cli@2.0.24
+# (OpenCode V2) or @opencode/cli@beta.
 #
 # When a new stable release passes here, promote it by editing
 # .github/opencode-versions.json (see docs/releasing.md). Future automation can
@@ -16,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       opencode-version:
-        description: 'npm version or dist-tag (e.g. beta, 0.0.0-beta-…, 2.0.0-beta.1) — skips matrix, runs single cell'
+        description: 'npm specifier — bare version/dist-tag means opencode-ai (e.g. 1.18.35, beta); full specifier selects any package (e.g. @opencode/cli@2.0.24) — skips matrix, runs single cell'
         required: false
         type: string
       reason:
@@ -35,6 +37,7 @@ jobs:
     outputs:
       versions: ${{ steps.resolve.outputs.versions }}
       latest: ${{ steps.resolve.outputs.latest }}
+      package: ${{ steps.resolve.outputs.package }}
     steps:
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -53,21 +56,36 @@ jobs:
           summary() { echo "${1}" >>"$GITHUB_STEP_SUMMARY"; }
 
           if [[ -n "$CUSTOM" ]]; then
-            VERSION_JSON="$(npm view "opencode-ai@${CUSTOM}" version --json)" || {
-              echo "::error::opencode-ai@${CUSTOM} not found on npm registry — check the version"
+            # Full specifier (starts with @ or contains /) selects any npm
+            # package — @opencode/cli is OpenCode V2. Bare value → opencode-ai.
+            if [[ "$CUSTOM" == @* || "$CUSTOM" == */* ]]; then
+              PKG="$CUSTOM"
+              VER=""
+              if [[ "${CUSTOM##*/}" == *@* ]]; then
+                PKG="${CUSTOM%@*}"
+                VER="${CUSTOM##*@}"
+              fi
+            else
+              PKG="opencode-ai"
+              VER="$CUSTOM"
+            fi
+            FULL="${PKG}${VER:+@$VER}"
+            echo "package=${PKG}" >>"$GITHUB_OUTPUT"
+            VERSION_JSON="$(npm view "${FULL}" version --json)" || {
+              echo "::error::${FULL} not found on npm registry — check the version"
               exit 1
             }
             if [[ "$(jq -r 'type' <<<"$VERSION_JSON")" != "string" ]]; then
-              echo "::error::opencode-ai@${CUSTOM} resolved to multiple versions (range or wildcard). Use an exact version or dist-tag."
+              echo "::error::${FULL} resolved to multiple versions (range or wildcard). Use an exact version or dist-tag."
               exit 1
             fi
             VERSION="$(jq -r '.' <<<"$VERSION_JSON")"
             if [[ -z "$VERSION" ]]; then
-              echo "::error::No version resolved for opencode-ai@${CUSTOM}"
+              echo "::error::No version resolved for ${FULL}"
               exit 1
             fi
-            notice "Manual dispatch: $VERSION${REASON:+ ($REASON)}"
-            summary "**Manual dispatch:** opencode-ai@${CUSTOM} → ${VERSION}${REASON:+ — $REASON}"
+            notice "Manual dispatch: ${FULL} → ${VERSION}${REASON:+ ($REASON)}"
+            summary "**Manual dispatch:** ${FULL} → ${VERSION}${REASON:+ — $REASON}"
             echo "versions=$(jq -cn '[$v]' --arg v "$VERSION")" >>"$GITHUB_OUTPUT"
             echo "latest=${VERSION}" >>"$GITHUB_OUTPUT"
           else
@@ -87,6 +105,7 @@ jobs:
             summary "**Scheduled matrix:** ${VERSIONS}"
             echo "versions=${VERSIONS}" >>"$GITHUB_OUTPUT"
             echo "latest=${LATEST}" >>"$GITHUB_OUTPUT"
+            echo "package=opencode-ai" >>"$GITHUB_OUTPUT"
           fi
 
   # Run the TUI harness for every resolved version. Each cell packs its own
@@ -119,8 +138,10 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Install OpenCode and tmux
+        env:
+          PACKAGE: ${{ needs.resolve.outputs.package }}
         run: |
-          npm install -g opencode-ai@${{ matrix.opencode-version }}
+          npm install -g "${PACKAGE}@${{ matrix.opencode-version }}"
           sudo apt-get update
           sudo apt-get install -y tmux
 
