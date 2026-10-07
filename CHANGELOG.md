@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.2
+
+### Patch Changes
+
+- e918865: Make the packed-TUI e2e harness compatible with OpenCode V2 (`@opencode/cli`): register the plugin by writing project `.opencode/opencode.json` (V2 `plugin add` is an interactive wizard), use lowercase `--log-level debug`, and isolate the V2 managed `serve --service` daemon on its own port. V1 behavior unchanged.
+- 0acee2b: Fix the OAuth callback writing tokens to the wrong local auth store (#32). Persist tokens against the per-flow pending auth entry (keyed by state) instead of the singleton callback server's first-call input, so concurrent flows for different directories no longer cross-write each other's store.
+- e549fc1: Refresh vendored Supabase skills from `supabase/agent-skills` v0.1.9 (commit `544bfc5`). Adds scoped personal access token guidance, declarative schema workflow, and a debugging section to the `supabase` skill; broadens the `supabase-postgres-best-practices` trigger description; records both skill changelogs. Provenance updated in `skills/.upstream.json`. Context: #46.
+
 ## 0.5.1
 
 ### Patch Changes
