@@ -21,6 +21,7 @@ type HostAuthSetMock = ReturnType<typeof mock>;
 
 type TestFixtures = {
   hostAuthSet: HostAuthSetMock;
+  clearHostAuth: HostAuthSetMock;
   input: TestPluginInput;
 };
 
@@ -36,6 +37,7 @@ async function createInput(): Promise<TestFixtures> {
   const root = await mkdtemp(join(tmpdir(), "opencode-supabase-tools-"));
   cleanupPaths.push(root);
   const hostAuthSet = mock(async () => ({ data: true }));
+  const clearHostAuth = mock(async () => undefined);
   const input = {
     client: {
       auth: {
@@ -44,10 +46,10 @@ async function createInput(): Promise<TestFixtures> {
     },
     directory: join(root, "consumer"),
     worktree: root,
-    serverUrl: new URL("http://127.0.0.1:7777/"),
+    clearHostAuth,
   } satisfies TestPluginInput;
 
-  return { hostAuthSet, input };
+  return { hostAuthSet, clearHostAuth, input };
 }
 
 async function writeRawStore(input: TestPluginInput, contents: string) {
@@ -333,29 +335,17 @@ describe("server tools auth helper", () => {
   });
 
   test("disconnect helper clears saved auth and host auth", async () => {
-    const { input } = await createInput();
+    const { input, clearHostAuth } = await createInput();
     await writeSavedAuth(input, {
       access: "saved-access",
       refresh: "saved-refresh",
       expires: Date.now() + 60_000,
     });
 
-    const fetchMock: FetchLike = mock(async (request) => {
-      const url = String(request);
-      if (url === `http://127.0.0.1:7777/auth/supabase?directory=${encodeURIComponent(input.directory)}`) {
-        return new Response(JSON.stringify(true), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      throw new Error(`unexpected url: ${url}`);
-    });
-
-    await disconnectSupabaseAuth(input, { fetch: fetchMock });
+    await disconnectSupabaseAuth(input);
 
     await expect(readSavedAuth(input)).resolves.toEqual({ version: 1 });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(clearHostAuth).toHaveBeenCalledTimes(1);
   });
 
   test("clears saved auth and host auth when refresh is unauthorized", async () => {
@@ -379,13 +369,6 @@ describe("server tools auth helper", () => {
           }),
           { status: 401, headers: { "Content-Type": "application/json" } },
         );
-      }
-
-      if (url === `http://127.0.0.1:7777/auth/supabase?directory=${encodeURIComponent(input.directory)}`) {
-        return new Response(JSON.stringify(true), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
       }
 
       throw new Error(`unexpected url: ${url}`);
@@ -638,7 +621,7 @@ describe("server tools auth helper", () => {
       },
       directory: join(root, "consumer-a"),
       worktree: root,
-      serverUrl: new URL("http://127.0.0.1:7777/"),
+      clearHostAuth: mock(async () => undefined),
     } satisfies TestPluginInput;
     const secondInput = {
       client: {
@@ -648,7 +631,7 @@ describe("server tools auth helper", () => {
       },
       directory: join(root, "consumer-b"),
       worktree: root,
-      serverUrl: new URL("http://127.0.0.1:7777/"),
+      clearHostAuth: mock(async () => undefined),
     } satisfies TestPluginInput;
 
     process.env.OPENCODE_SUPABASE_BROKER_URL = "https://example.com/broker";
@@ -724,7 +707,7 @@ describe("server tools auth helper", () => {
       },
       directory: join(root, "consumer-b"),
       worktree: root,
-      serverUrl: new URL("http://127.0.0.1:7777/"),
+      clearHostAuth: mock(async () => undefined),
     } satisfies TestPluginInput;
     let brokerRefreshCalls = 0;
     const fetchMock: FetchLike = mock(async (request, init) => {
@@ -769,7 +752,7 @@ describe("server tools auth helper", () => {
       },
       directory: join(root, "consumer-a"),
       worktree: root,
-      serverUrl: new URL("http://127.0.0.1:7777/"),
+      clearHostAuth: mock(async () => undefined),
     } satisfies TestPluginInput;
 
     process.env.OPENCODE_SUPABASE_BROKER_URL = "https://example.com/broker";
@@ -864,7 +847,7 @@ describe("server tools auth helper", () => {
   });
 
   test("stale refresh failure does not clear newer auth written mid-flight", async () => {
-    const { input } = await createInput();
+    const { input, clearHostAuth } = await createInput();
     process.env.OPENCODE_SUPABASE_BROKER_URL = "https://example.com/broker";
     await writeSavedAuth(input, {
       access: "expired-access",
@@ -877,7 +860,6 @@ describe("server tools auth helper", () => {
     const refreshStarted = new Promise<void>((resolve) => {
       markRefreshStarted = resolve;
     });
-    const hostClearFetch: FetchLike = mock(async () => new Response(null, { status: 204 }));
     const fetchMock: FetchLike = mock(async (request, init) => {
       const url = String(request);
       if (url === "https://example.com/broker/refresh") {
@@ -900,7 +882,7 @@ describe("server tools auth helper", () => {
         );
       }
 
-      return hostClearFetch(request, init);
+      throw new Error(`unexpected url: ${url}`);
     });
 
     const refreshPromise = ensureSupabaseToolAuth(
@@ -925,11 +907,11 @@ describe("server tools auth helper", () => {
 
     await expect(refreshPromise).resolves.toEqual(newerAuth);
     await expect(readSavedAuth(input)).resolves.toEqual({ version: 1, auth: newerAuth });
-    expect(hostClearFetch).not.toHaveBeenCalled();
+    expect(clearHostAuth).not.toHaveBeenCalled();
   });
 
   test("ambiguous broker refresh errors do not clear saved auth", async () => {
-    const { input } = await createInput();
+    const { input, clearHostAuth } = await createInput();
     process.env.OPENCODE_SUPABASE_BROKER_URL = "https://example.com/broker";
     const savedAuth = {
       access: "expired-access",
@@ -938,7 +920,6 @@ describe("server tools auth helper", () => {
     };
     await writeSavedAuth(input, savedAuth);
 
-    const hostClearFetch: FetchLike = mock(async () => new Response(null, { status: 204 }));
     const fetchMock: FetchLike = mock(async (request, init) => {
       const url = String(request);
       if (url === "https://example.com/broker/refresh") {
@@ -957,7 +938,7 @@ describe("server tools auth helper", () => {
         );
       }
 
-      return hostClearFetch(request, init);
+      throw new Error(`unexpected url: ${url}`);
     });
 
     await expect(
@@ -972,12 +953,13 @@ describe("server tools auth helper", () => {
     ).rejects.toThrow("Supabase auth refresh failed: broker rejected malformed refresh request");
 
     await expect(readSavedAuth(input)).resolves.toEqual({ version: 1, auth: savedAuth });
-    expect(hostClearFetch).not.toHaveBeenCalled();
+    expect(clearHostAuth).not.toHaveBeenCalled();
   });
 
   test("shared stale refresh rejection clears host auth for each joined directory", async () => {
     const root = await mkdtemp(join(tmpdir(), "opencode-supabase-tools-"));
     cleanupPaths.push(root);
+    let hostClearCalls = 0;
     const firstInput = {
       client: {
         auth: {
@@ -986,7 +968,9 @@ describe("server tools auth helper", () => {
       },
       directory: join(root, "consumer-a"),
       worktree: root,
-      serverUrl: new URL("http://127.0.0.1:7777/"),
+      clearHostAuth: mock(async () => {
+        hostClearCalls += 1;
+      }),
     } satisfies TestPluginInput;
     const secondInput = {
       client: {
@@ -996,7 +980,9 @@ describe("server tools auth helper", () => {
       },
       directory: join(root, "consumer-b"),
       worktree: root,
-      serverUrl: new URL("http://127.0.0.1:7777/"),
+      clearHostAuth: mock(async () => {
+        hostClearCalls += 1;
+      }),
     } satisfies TestPluginInput;
 
     process.env.OPENCODE_SUPABASE_BROKER_URL = "https://example.com/broker";
@@ -1007,7 +993,6 @@ describe("server tools auth helper", () => {
     });
 
     let brokerRefreshCalls = 0;
-    let hostClearCalls = 0;
     const fetchMock: FetchLike = mock(async (request, init) => {
       const url = String(request);
       if (url === "https://example.com/broker/refresh") {
@@ -1024,12 +1009,6 @@ describe("server tools auth helper", () => {
             headers: { "Content-Type": "application/json" },
           },
         );
-      }
-
-      if (url.startsWith("http://127.0.0.1:7777/auth/supabase?directory=")) {
-        expect(init?.method).toBe("DELETE");
-        hostClearCalls += 1;
-        return new Response(null, { status: 204 });
       }
 
       throw new Error(`Unexpected fetch ${url}`);
@@ -1063,6 +1042,7 @@ describe("server tools auth helper", () => {
   test("shared reset-notice refresh rejection clears host auth for each joined directory", async () => {
     const root = await mkdtemp(join(tmpdir(), "opencode-supabase-tools-"));
     cleanupPaths.push(root);
+    let hostClearCalls = 0;
     const firstInput = {
       client: {
         auth: {
@@ -1071,7 +1051,9 @@ describe("server tools auth helper", () => {
       },
       directory: join(root, "consumer-a"),
       worktree: root,
-      serverUrl: new URL("http://127.0.0.1:7777/"),
+      clearHostAuth: mock(async () => {
+        hostClearCalls += 1;
+      }),
     } satisfies TestPluginInput;
     const secondInput = {
       client: {
@@ -1081,7 +1063,9 @@ describe("server tools auth helper", () => {
       },
       directory: join(root, "consumer-b"),
       worktree: root,
-      serverUrl: new URL("http://127.0.0.1:7777/"),
+      clearHostAuth: mock(async () => {
+        hostClearCalls += 1;
+      }),
     } satisfies TestPluginInput;
 
     process.env.OPENCODE_SUPABASE_BROKER_URL = "https://example.com/broker";
@@ -1092,7 +1076,6 @@ describe("server tools auth helper", () => {
     });
 
     let brokerRefreshCalls = 0;
-    let hostClearCalls = 0;
     const fetchMock: FetchLike = mock(async (request, init) => {
       const url = String(request);
       if (url === "https://example.com/broker/refresh") {
@@ -1110,12 +1093,6 @@ describe("server tools auth helper", () => {
             headers: { "Content-Type": "application/json" },
           },
         );
-      }
-
-      if (url.startsWith("http://127.0.0.1:7777/auth/supabase?directory=")) {
-        expect(init?.method).toBe("DELETE");
-        hostClearCalls += 1;
-        return new Response(null, { status: 204 });
       }
 
       throw new Error(`Unexpected fetch ${url}`);
@@ -1426,10 +1403,6 @@ describe("server tools auth helper", () => {
         );
       }
 
-      if (url === `http://127.0.0.1:7777/auth/supabase?directory=${encodeURIComponent(input.directory)}`) {
-        throw new Error("delete failed");
-      }
-
       throw new Error(`unexpected url: ${url}`);
     });
 
@@ -1475,13 +1448,6 @@ describe("server tools auth helper", () => {
         );
       }
 
-      if (url === `http://127.0.0.1:7777/auth/supabase?directory=${encodeURIComponent(input.directory)}`) {
-        return new Response(JSON.stringify(true), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
       throw new Error(`unexpected url: ${url}`);
     });
 
@@ -1525,13 +1491,6 @@ describe("server tools auth helper", () => {
           }),
           { status: 401, headers: { "Content-Type": "application/json" } },
         );
-      }
-
-      if (url === `http://127.0.0.1:7777/auth/supabase?directory=${encodeURIComponent(input.directory)}`) {
-        return new Response(JSON.stringify(true), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
       }
 
       throw new Error(`unexpected url: ${url}`);
@@ -1902,7 +1861,7 @@ describe("server tools auth helper", () => {
     });
 
     await expect(tools.supabase_login.execute({}, createContext(input))).resolves.toBe(
-      "Supabase login must be completed in the TUI. Run /supabase first.",
+      "Supabase login must be completed through the Supabase integration. Connect it from the integrations UI, then retry this tool.",
     );
   });
 });

@@ -10,7 +10,9 @@
   },
   "main": "./index.ts",
   "exports": {
+    ".": "./index.ts",
     "./server": "./src/server/index.ts",
+    "./v2": "./src/index.v2.ts",
     "./tui": "./dist/tui.js"
   },
   "files": [
@@ -39,6 +41,7 @@
   },
   "dependencies": {
     "@opencode-ai/plugin": "1.3.13",
+    "@opencode/plugin": "^2.0.16",
     "open": "11.0.0"
   },
   "devDependencies": {

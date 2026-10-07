@@ -1,4 +1,4 @@
-import type { PluginOptions } from "@opencode-ai/plugin";
+import type { PluginOptions } from "./plugin-compat.ts";
 
 export type SupabaseEnv = Record<string, string | undefined>;
 

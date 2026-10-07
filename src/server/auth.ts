@@ -1,5 +1,5 @@
 import { createConnection } from "node:net";
-import type { PluginInput, PluginOptions } from "@opencode-ai/plugin";
+import type { PluginInput, PluginOptions } from "../shared/plugin-compat.ts";
 
 import { formatAuthError } from "../shared/auth-errors.ts";
 import {
@@ -14,6 +14,7 @@ import type { FetchLike, SupabaseTokenResponse } from "../shared/types.ts";
 import { HTML_SUCCESS, htmlError } from "./auth-html.ts";
 import type { SavedStateNotice } from "./store.ts";
 import { readSavedAuth, writeSavedAuth } from "./store.ts";
+import type { SupabaseToolInput } from "./tools.ts";
 import { NOT_CONNECTED_MESSAGE, disconnectSupabaseAuth, ensureSupabaseToolAuth } from "./tools.ts";
 
 const CALLBACK_PATH = "/auth/callback";
@@ -33,9 +34,13 @@ type AuthDeps = {
   fetch?: FetchLike;
   logger?: SupabaseLogger;
   setCallbackTimeout?: typeof setTimeout;
+  // Host-auth plumbing shared with the tool layer; the V2 entrypoint builds it
+  // from plugin storage, the V1 entrypoint from the host auth endpoints. Only
+  // the status/disconnect OAuth method needs it.
+  toolInput?: SupabaseToolInput;
 };
 
-type SupabaseAuthInput = Pick<PluginInput, "client" | "directory" | "serverUrl" | "worktree">;
+type SupabaseAuthInput = Pick<PluginInput, "directory" | "worktree">;
 
 type SupabaseStatusInstructions =
   | {
@@ -357,7 +362,10 @@ export function createSupabaseAuth(
         label: "Supabase Status",
         async authorize(inputs?: Record<string, string>) {
           if (inputs?.action === "disconnect") {
-            await disconnectSupabaseAuth(input, { fetch: deps.fetch });
+            if (!deps.toolInput) {
+              throw new Error("Supabase disconnect requires tool host auth access");
+            }
+            await disconnectSupabaseAuth(deps.toolInput);
             return {
               url: "https://supabase.com/",
               instructions: encodeStatusInstructions({ status: "disconnected", checked: false }),
@@ -384,7 +392,10 @@ export function createSupabaseAuth(
             method: "auto" as const,
             callback: async () => {
               try {
-                const auth = await ensureSupabaseToolAuth(input, options, deps);
+                if (!deps.toolInput) {
+                  throw new Error("Supabase auth status requires tool host auth access");
+                }
+                const auth = await ensureSupabaseToolAuth(deps.toolInput, options, deps);
                 return {
                   type: "success" as const,
                   access: auth.access,
