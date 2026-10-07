@@ -42,7 +42,7 @@
     "open": "11.0.0"
   },
   "devDependencies": {
-    "@babel/core": "7.28.0",
+    "@babel/core": "7.29.6",
     "@babel/preset-typescript": "7.27.1",
     "@biomejs/biome": "^1.9.4",
     "@changesets/cli": "^2.30.0",
