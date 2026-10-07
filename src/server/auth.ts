@@ -23,6 +23,12 @@ const CALLBACK_PORTS = [14589, 14590, 14591] as const;
 type PendingAuth = {
   codeVerifier: string;
   redirectUri: string;
+  // Per-flow storage context (#32): the singleton callback server must persist
+  // to the directory that started THIS flow, not the one that first built it.
+  input: Pick<PluginInput, "directory" | "worktree">;
+  brokerConfig: BrokerConfig;
+  fetch?: FetchLike;
+  logger?: SupabaseLogger;
   resolve: (result: { tokens: SupabaseTokenResponse; expires: number }) => void;
   reject: (error: Error) => void;
   timeout: ReturnType<typeof setTimeout>;
@@ -108,8 +114,6 @@ async function isPortInUse(port: number) {
 
 async function ensureServer(
   callbackPorts: readonly number[],
-  _config: ReturnType<typeof readSupabaseConfig>,
-  input: Pick<PluginInput, "directory" | "worktree">,
   deps: AuthDeps,
 ) {
   const candidatePorts = normalizeCallbackPorts(callbackPorts);
@@ -120,10 +124,6 @@ async function ensureServer(
     }
     return serverPort;
   }
-
-  const brokerConfig: BrokerConfig = {
-    baseUrl: _config.brokerBaseUrl,
-  };
 
   let selectedPort: number | undefined;
   for (const port of candidatePorts) {
@@ -143,11 +143,6 @@ async function ensureServer(
             }
 
             const state = url.searchParams.get("state");
-            await deps.logger?.debug("supabase auth callback received", {
-              has_state: Boolean(state),
-              has_code: Boolean(url.searchParams.get("code")),
-              has_error: Boolean(url.searchParams.get("error")),
-            });
             if (!state) {
               return new Response(htmlError("Missing required state parameter - potential CSRF attack"), {
                 status: 400,
@@ -163,12 +158,18 @@ async function ensureServer(
               });
             }
 
+            await pending.logger?.debug("supabase auth callback received", {
+              has_state: true,
+              has_code: Boolean(url.searchParams.get("code")),
+              has_error: Boolean(url.searchParams.get("error")),
+            });
+
             const error = url.searchParams.get("error");
             const errorDescription = url.searchParams.get("error_description");
             if (error) {
               clearTimeout(pending.timeout);
               pendingAuths.delete(state);
-              await deps.logger?.error("supabase auth failed", {
+              await pending.logger?.error("supabase auth failed", {
                 reason: "provider_denied",
               });
               pending.reject(new Error(errorDescription || error));
@@ -182,7 +183,7 @@ async function ensureServer(
             if (!code) {
               clearTimeout(pending.timeout);
               pendingAuths.delete(state);
-              await deps.logger?.error("supabase auth failed", {
+              await pending.logger?.error("supabase auth failed", {
                 reason: "missing_code",
               });
               pending.reject(new Error("Missing authorization code"));
@@ -198,18 +199,18 @@ async function ensureServer(
 
             try {
               const tokens = await exchangeCodeThroughBroker(
-                brokerConfig,
+                pending.brokerConfig,
                 {
                   code,
                   redirect_uri: pending.redirectUri,
                   code_verifier: pending.codeVerifier,
                 },
-                deps.fetch,
-                deps.logger,
+                pending.fetch,
+                pending.logger,
               );
 
               const expires = Date.now() + (tokens.expires_in || 3600) * 1000;
-              await writeSavedAuth(input, {
+              await writeSavedAuth(pending.input, {
                 access: tokens.access_token,
                 refresh: tokens.refresh_token,
                 expires,
@@ -217,7 +218,7 @@ async function ensureServer(
 
               pending.resolve({ tokens, expires });
 
-              await deps.logger?.info("supabase auth completed", {
+              await pending.logger?.info("supabase auth completed", {
                 status: "success",
               });
 
@@ -229,7 +230,7 @@ async function ensureServer(
             } catch (cause) {
               const message = formatAuthError("exchange", cause);
 
-              await deps.logger?.error("supabase auth failed", {
+              await pending.logger?.error("supabase auth failed", {
                 status: cause instanceof BrokerClientError ? cause.status : 400,
                 broker_error: cause instanceof BrokerClientError,
               });
@@ -288,6 +289,8 @@ function waitForCallback(
   state: string,
   codeVerifier: string,
   redirectUri: string,
+  input: Pick<PluginInput, "directory" | "worktree">,
+  brokerConfig: BrokerConfig,
   deps: AuthDeps,
 ) {
   return new Promise<{ tokens: SupabaseTokenResponse; expires: number }>((resolve, reject) => {
@@ -305,6 +308,10 @@ function waitForCallback(
     pendingAuths.set(state, {
       codeVerifier,
       redirectUri,
+      input,
+      brokerConfig,
+      fetch: deps.fetch,
+      logger: deps.logger,
       resolve,
       reject,
       timeout,
@@ -327,14 +334,22 @@ export function createSupabaseAuth(
         type: "oauth" as const,
         label: "Supabase",
         async authorize() {
-          const port = await ensureServer(authCallbackPorts, config, input, deps);
+          const brokerConfig: BrokerConfig = { baseUrl: config.brokerBaseUrl };
+          const port = await ensureServer(authCallbackPorts, deps);
           await deps.logger?.info("supabase auth started", {
             port,
           });
           const pkce = await generatePKCE();
           const state = generateState();
           const redirectUri = callbackUrl(port);
-          const callbackPromise = waitForCallback(state, pkce.verifier, redirectUri, deps);
+          const callbackPromise = waitForCallback(
+            state,
+            pkce.verifier,
+            redirectUri,
+            input,
+            brokerConfig,
+            deps,
+          );
 
           return {
             url: buildAuthorizeUrl(config, redirectUri, pkce, state),

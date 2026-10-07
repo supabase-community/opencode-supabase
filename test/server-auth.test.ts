@@ -756,4 +756,54 @@ describe("server auth hook", () => {
       },
     });
   });
+
+  test("two concurrent flows for different directories do not cross-write auth stores (#32)", async () => {
+    const inputA = await createInput();
+    const inputB = await createInput();
+    process.env.OPENCODE_SUPABASE_BROKER_URL = "https://example.com/broker";
+    const fetchMock = mock(async () =>
+      new Response(
+        JSON.stringify({
+          access_token: "access-B",
+          refresh_token: "refresh-B",
+          expires_in: 1800,
+          token_type: "bearer",
+        }),
+      ),
+    );
+
+    // Flow A starts the singleton callback server first (its input used to be captured by the handler).
+    const authA = createSupabaseAuth(
+      inputA as never,
+      { clientId: "plugin-client", oauthPort: 17700 },
+      { fetch: fetchMock as unknown as FetchLike, callbackPorts: [17700, 17701, 17702] },
+    );
+    const resultA = await firstAuthMethod(authA).authorize();
+    void resultA.callback().catch(() => undefined);
+
+    // Flow B reuses the same server (same port window) but targets a different directory.
+    const authB = createSupabaseAuth(
+      inputB as never,
+      { clientId: "plugin-client", oauthPort: 17700 },
+      { fetch: fetchMock as unknown as FetchLike, callbackPorts: [17700, 17701, 17702] },
+    );
+    const resultB = await firstAuthMethod(authB).authorize();
+    const state = requireSearchParam(new URL(resultB.url), "state");
+    const redirectUri = new URL(requireSearchParam(new URL(resultB.url), "redirect_uri"));
+
+    const pending = resultB.callback();
+    const response = await fetch(`${redirectUri.toString()}?code=code-B&state=${state}`);
+    expect(response.status).toBe(200);
+
+    const callbackResult = await pending;
+    expect(callbackResult).toMatchObject({ type: "success", access: "access-B" });
+    if (callbackResult.type !== "success") throw new Error("Expected OAuth callback to succeed");
+
+    // B's tokens land in B's store; A's store stays empty (regression for #32).
+    await expect(readSavedAuth(inputB as never)).resolves.toEqual({
+      version: 1,
+      auth: { access: "access-B", refresh: "refresh-B", expires: callbackResult.expires },
+    });
+    await expect(readSavedAuth(inputA as never)).resolves.toEqual({ version: 1 });
+  });
 });
