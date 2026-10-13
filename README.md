@@ -6,11 +6,24 @@ Connect OpenCode to Supabase: account login, Management API tools, bundled Supab
 
 ## Quickstart
 
-Requires OpenCode `>= 1.17.4`.
+Supports OpenCode 1 (`>= 1.17.4`) and OpenCode 2 (`>= 2.0.27`).
+
+OpenCode 1:
 
 ```bash
 opencode plugin opencode-supabase
 ```
+
+OpenCode 2:
+
+```bash
+opencode plugin add opencode-supabase
+```
+
+Both versions use `/supabase`. OpenCode 2 stores credentials in its native
+integration system, with account selection and disconnect in the dialog.
+Existing V1 local credentials are not imported automatically; reconnect when
+moving to V2.
 
 Open `opencode` in your project, then run:
 
