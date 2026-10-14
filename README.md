@@ -20,10 +20,19 @@ OpenCode 2:
 opencode plugin add opencode-supabase
 ```
 
-Both versions use `/supabase`. OpenCode 2 stores credentials in its native
-integration system, with account selection and disconnect in the dialog.
-Existing V1 local credentials are not imported automatically; reconnect when
-moving to V2.
+Both versions use `/supabase`. The V2 connected dialog uses OpenCode 2's native
+selection component and offers **Continue with current account** or
+**Disconnect current account**. These actions are plugin-defined; V1 keeps its
+existing dialog.
+
+OpenCode 2 stores credentials in its native integration system. Unlike V1's
+provider-focused `/connect`, V2's `/connect` also manages service integrations,
+including Supabase: add, switch, rename, or remove saved accounts there.
+The active Supabase account is shared by projects using the same OpenCode profile,
+not bound to a repository. Disconnect removes only the current saved credential
+and does not revoke access at Supabase; if another account is saved, OpenCode
+makes it active. Existing V1 local credentials are not imported automatically;
+reconnect when moving to V2.
 
 Open `opencode` in your project, then run:
 

@@ -5,7 +5,7 @@ import { setupV2Tui } from "../src/tui/v2.tsx";
 function fixture(accounts: { type: string; id: string; label: string }[] = []) {
   let command: { run: () => Promise<void> } | undefined;
   const select = mock(async (_input: unknown) => "continue");
-  const confirm = mock(async () => true);
+  const confirm = mock(async (_input: unknown) => true);
   const show = mock((_render: unknown, _close: unknown) => undefined);
   const attempt = { attemptID: "attempt-A", url: "https://example.com/oauth", time: { expires: Date.now() + 300000 } };
   const connect = mock(async (_input: unknown) => ({ data: attempt }));
@@ -48,11 +48,15 @@ describe("V2 /supabase", () => {
   });
 
   test("existing connections preserve once-per-session onboarding", async () => {
-    const f = fixture([{ type: "credential", id: "account-A", label: "Account A" }]);
+    const f = fixture([{ type: "credential", id: "account-B", label: "Account B" }, { type: "credential", id: "account-A", label: "Account A" }]);
     await f.command.run();
     await f.command.run();
-    expect(f.select.mock.calls[0]?.[0]).toMatchObject({
-      options: expect.arrayContaining([{ title: "Continue with current account", value: "continue" }]),
+    expect(f.select.mock.calls[0]?.[0]).toEqual({
+      title: "Supabase account",
+      options: [
+        { title: "Continue with current account", value: "continue" },
+        { title: "Disconnect current account", value: "disconnect" },
+      ],
     });
     expect(f.prompt).toHaveBeenCalledTimes(1);
     expect(f.connect).not.toHaveBeenCalled();
@@ -60,18 +64,34 @@ describe("V2 /supabase", () => {
     await f.dispose();
   });
 
-  test("account selection and disconnect affect only the chosen host credential", async () => {
-    const f = fixture([{ type: "credential", id: "account-A", label: "Account A" }, { type: "credential", id: "account-B", label: "Account B" }]);
-    f.select.mockResolvedValueOnce("choose").mockResolvedValueOnce("account-B");
-    await f.command.run();
-    expect(f.activate.mock.calls[0]?.[0]).toEqual({ credentialID: "account-B" });
-    f.select.mockResolvedValueOnce("disconnect").mockResolvedValueOnce("account-A");
+  test("disconnect confirms removal of only the current host credential without an account picker", async () => {
+    const f = fixture([{ type: "credential", id: "account-B", label: "Account B" }, { type: "credential", id: "account-A", label: "Account A" }]);
+    f.select.mockResolvedValueOnce("disconnect");
     f.confirm.mockResolvedValueOnce(false);
     await f.command.run();
     expect(f.remove).not.toHaveBeenCalled();
-    f.select.mockResolvedValueOnce("disconnect").mockResolvedValueOnce("account-A");
+    expect(f.confirm.mock.calls[0]).toEqual([{
+      title: "Disconnect current Supabase account?",
+      message: "Remove Account B from OpenCode? This does not revoke access at Supabase. Another saved account will become active.",
+    }]);
+    f.select.mockResolvedValueOnce("disconnect");
     await f.command.run();
-    expect(f.remove.mock.calls[0]?.[0]).toEqual({ credentialID: "account-A" });
+    expect(f.remove.mock.calls).toEqual([[{ credentialID: "account-B" }]]);
+    expect(f.select).toHaveBeenCalledTimes(2);
+    expect(f.activate).not.toHaveBeenCalled();
+    expect(f.connect).not.toHaveBeenCalled();
+    await f.dispose();
+  });
+
+  test("disconnecting the only credential does not promise a replacement account", async () => {
+    const f = fixture([{ type: "credential", id: "account-A", label: "Account A" }]);
+    f.select.mockResolvedValueOnce("disconnect");
+    await f.command.run();
+    expect(f.confirm.mock.calls[0]).toEqual([{
+      title: "Disconnect current Supabase account?",
+      message: "Remove Account A from OpenCode? This does not revoke access at Supabase.",
+    }]);
+    expect(f.remove.mock.calls).toEqual([[{ credentialID: "account-A" }]]);
     await f.dispose();
   });
 
