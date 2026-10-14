@@ -20,7 +20,7 @@ type SupabaseDialogProps = {
   };
 };
 
-const ONBOARDING_MESSAGE = `Supabase is connected.
+export const ONBOARDING_MESSAGE = `Supabase is connected.
 
 Start by listing your Supabase projects, then connect project-scoped MCP tools for database inspection, docs, advisors, and more in OpenCode.
 

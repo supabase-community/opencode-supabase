@@ -52,5 +52,5 @@ if (!result.success) {
 
 await Bun.write(
   "dist/tui.d.ts",
-  'declare const plugin: { id: "supabase"; tui: unknown };\nexport default plugin;\n',
+  'declare const plugin: { id: "supabase"; tui: unknown; setup: unknown };\nexport default plugin;\n',
 );

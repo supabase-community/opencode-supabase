@@ -29,6 +29,8 @@ type PendingAuth = {
   brokerConfig: BrokerConfig;
   fetch?: FetchLike;
   logger?: SupabaseLogger;
+  owner?: object;
+  persist: boolean;
   resolve: (result: { tokens: SupabaseTokenResponse; expires: number }) => void;
   reject: (error: Error) => void;
   timeout: ReturnType<typeof setTimeout>;
@@ -39,6 +41,9 @@ type AuthDeps = {
   fetch?: FetchLike;
   logger?: SupabaseLogger;
   setCallbackTimeout?: typeof setTimeout;
+  owner?: object;
+  // V2 returns credentials to the host; do not also save a V1 local copy.
+  persist?: boolean;
 };
 
 type SupabaseAuthInput = Pick<PluginInput, "client" | "directory" | "serverUrl" | "worktree">;
@@ -210,11 +215,13 @@ async function ensureServer(
               );
 
               const expires = Date.now() + (tokens.expires_in || 3600) * 1000;
-              await writeSavedAuth(pending.input, {
-                access: tokens.access_token,
-                refresh: tokens.refresh_token,
-                expires,
-              });
+              if (pending.persist) {
+                await writeSavedAuth(pending.input, {
+                  access: tokens.access_token,
+                  refresh: tokens.refresh_token,
+                  expires,
+                });
+              }
 
               pending.resolve({ tokens, expires });
 
@@ -312,6 +319,8 @@ function waitForCallback(
       brokerConfig,
       fetch: deps.fetch,
       logger: deps.logger,
+      owner: deps.owner,
+      persist: deps.persist !== false,
       resolve,
       reject,
       timeout,
@@ -319,54 +328,65 @@ function waitForCallback(
   });
 }
 
-export function createSupabaseAuth(
-  input: SupabaseAuthInput,
+export function createSupabaseOAuth(
+  input: Pick<PluginInput, "directory" | "worktree">,
   options?: PluginOptions,
   deps: AuthDeps = {},
 ) {
   const config = readSupabaseConfig(options);
   const authCallbackPorts = normalizeCallbackPorts(deps.callbackPorts ?? CALLBACK_PORTS);
+  return {
+    type: "oauth" as const,
+    label: "Supabase",
+    async authorize() {
+      const port = await ensureServer(authCallbackPorts, deps);
+      await deps.logger?.info("supabase auth started", { port });
+      const pkce = await generatePKCE();
+      const state = generateState();
+      const redirectUri = callbackUrl(port);
+      const callbackPromise = waitForCallback(
+        state, pkce.verifier, redirectUri, input,
+        { baseUrl: config.brokerBaseUrl }, deps,
+      );
+      // A callback may fail before the host starts awaiting it.
+      void callbackPromise.catch(() => undefined);
+      return {
+        url: buildAuthorizeUrl(config, redirectUri, pkce, state),
+        instructions: "Complete Supabase authorization in your browser.",
+        method: "auto" as const,
+        callback: async () => {
+          const { tokens, expires } = await callbackPromise;
+          return {
+            type: "success" as const,
+            access: tokens.access_token,
+            refresh: tokens.refresh_token,
+            expires,
+          };
+        },
+        cancel: () => cancelSupabaseOAuth(state),
+      };
+    },
+  };
+}
 
+export async function cancelSupabaseOAuth(state: string) {
+  const pending = pendingAuths.get(state);
+  if (!pending) return;
+  clearTimeout(pending.timeout);
+  pendingAuths.delete(state);
+  pending.reject(new Error("OAuth authorization cancelled"));
+  await stopServerIfIdle(pending.logger, "cancelled");
+}
+
+export function createSupabaseAuth(
+  input: SupabaseAuthInput,
+  options?: PluginOptions,
+  deps: AuthDeps = {},
+) {
   return {
     provider: "supabase",
     methods: [
-      {
-        type: "oauth" as const,
-        label: "Supabase",
-        async authorize() {
-          const brokerConfig: BrokerConfig = { baseUrl: config.brokerBaseUrl };
-          const port = await ensureServer(authCallbackPorts, deps);
-          await deps.logger?.info("supabase auth started", {
-            port,
-          });
-          const pkce = await generatePKCE();
-          const state = generateState();
-          const redirectUri = callbackUrl(port);
-          const callbackPromise = waitForCallback(
-            state,
-            pkce.verifier,
-            redirectUri,
-            input,
-            brokerConfig,
-            deps,
-          );
-
-          return {
-            url: buildAuthorizeUrl(config, redirectUri, pkce, state),
-            instructions: "Complete Supabase authorization in your browser.",
-            method: "auto" as const,
-            callback: async () => {
-              const { tokens, expires } = await callbackPromise;
-              return {
-                type: "success" as const,
-                access: tokens.access_token,
-                refresh: tokens.refresh_token,
-                expires,
-              };
-            },
-          };
-        },
-      },
+      createSupabaseOAuth(input, options, deps),
       {
         type: "oauth" as const,
         label: "Supabase Status",
@@ -421,16 +441,12 @@ export function createSupabaseAuth(
   };
 }
 
-export async function stopSupabaseAuthServer() {
-  if (server) {
-    server.stop();
-    server = undefined;
-    serverPort = undefined;
-  }
-
+export async function stopSupabaseAuthServer(owner?: object) {
   for (const [state, pending] of pendingAuths) {
+    if (owner && pending.owner !== owner) continue;
     clearTimeout(pending.timeout);
     pending.reject(new Error("OAuth callback server stopped"));
     pendingAuths.delete(state);
   }
+  await stopServerIfIdle(undefined, "disposed");
 }

@@ -3,6 +3,7 @@ import type { TuiPlugin } from "@opencode-ai/plugin/tui";
 import { createSupabaseLogger, createTuiLogWriter } from "../shared/log.ts";
 import { createSupabaseCommand } from "./commands.ts";
 import { SupabaseDialog } from "./dialog.tsx";
+import { setupV2Tui } from "./v2.tsx";
 
 const tui: TuiPlugin = async (api) => {
   const logger = createSupabaseLogger({
@@ -24,4 +25,4 @@ const tui: TuiPlugin = async (api) => {
   ]);
 };
 
-export default { id: "supabase", tui };
+export default { id: "supabase", tui, setup: setupV2Tui };
