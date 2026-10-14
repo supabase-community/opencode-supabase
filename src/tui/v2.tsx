@@ -104,7 +104,7 @@ export function setupV2Tui(ctx: Context, openBrowser: (url: string) => Promise<u
       const action = await ctx.ui.dialog.select({
         title: "Supabase account",
         options: [
-          { title: "Continue", value: "continue", description: `Use ${accounts[0]?.label}` },
+          { title: "Continue with current account", value: "continue" },
           { title: "Connect another account", value: "connect" },
           { title: "Choose account", value: "choose" },
           { title: "Disconnect account", value: "disconnect" },
