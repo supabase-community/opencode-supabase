@@ -100,32 +100,26 @@ export function setupV2Tui(ctx: Context, openBrowser: (url: string) => Promise<u
       const { directory } = ctx.location ?? ctx.data.location.default();
       const { data: integration } = await ctx.client.integration.get({ integrationID: "supabase", location: { directory } });
       const accounts = integration.connections.filter((c) => c.type === "credential");
-      if (accounts.length === 0) { await connect(directory); return; }
+      // OpenCode orders the active credential first, including after native /connect changes.
+      const account = accounts[0];
+      if (!account) { await connect(directory); return; }
       const action = await ctx.ui.dialog.select({
         title: "Supabase account",
         options: [
           { title: "Continue with current account", value: "continue" },
-          { title: "Connect another account", value: "connect" },
-          { title: "Choose account", value: "choose" },
-          { title: "Disconnect account", value: "disconnect" },
+          { title: "Disconnect current account", value: "disconnect" },
         ],
       });
       if (disposed) return;
       if (action === "continue") await onboard(ctx, directory);
-      if (action === "connect") await connect(directory);
-      if (action === "choose" || action === "disconnect") {
-        const id = await ctx.ui.dialog.select({
-          title: action === "choose" ? "Choose Supabase account" : "Disconnect Supabase account",
-          options: accounts.map((account) => ({ title: account.label, value: account.id })),
+      if (action === "disconnect") {
+        const confirmed = await ctx.ui.dialog.confirm({
+          title: "Disconnect current Supabase account?",
+          message: `Remove ${account.label} from OpenCode? This does not revoke access at Supabase.${accounts.length > 1 ? " Another saved account will become active." : ""}`,
         });
-        if (!id || disposed) return;
-        if (action === "choose") await ctx.client.credential.activate({ credentialID: id });
-        if (action === "disconnect") {
-          const confirmed = await ctx.ui.dialog.confirm({ title: "Disconnect from Supabase?", message: "Remove this account from OpenCode? This does not revoke access at Supabase." });
-          if (!confirmed || disposed) return;
-          await ctx.client.credential.remove({ credentialID: id });
-        }
-        ctx.ui.toast.show({ message: action === "choose" ? "Supabase account selected" : "Disconnected from Supabase" });
+        if (!confirmed || disposed) return;
+        await ctx.client.credential.remove({ credentialID: account.id });
+        ctx.ui.toast.show({ message: "Current Supabase account disconnected" });
       }
     } catch (error) {
       if (!disposed) ctx.ui.toast.show({ title: "Supabase action failed", message: message(error), variant: "error" });
