@@ -4,7 +4,7 @@ import { setupV2Tui } from "../src/tui/v2.tsx";
 
 function fixture(accounts: { type: string; id: string; label: string }[] = []) {
   let command: { run: () => Promise<void> } | undefined;
-  const select = mock(async () => "continue");
+  const select = mock(async (_input: unknown) => "continue");
   const confirm = mock(async () => true);
   const show = mock((_render: unknown, _close: unknown) => undefined);
   const attempt = { attemptID: "attempt-A", url: "https://example.com/oauth", time: { expires: Date.now() + 300000 } };
@@ -51,8 +51,12 @@ describe("V2 /supabase", () => {
     const f = fixture([{ type: "credential", id: "account-A", label: "Account A" }]);
     await f.command.run();
     await f.command.run();
+    expect(f.select.mock.calls[0]?.[0]).toMatchObject({
+      options: expect.arrayContaining([{ title: "Continue with current account", value: "continue" }]),
+    });
     expect(f.prompt).toHaveBeenCalledTimes(1);
     expect(f.connect).not.toHaveBeenCalled();
+    expect(f.activate).not.toHaveBeenCalled();
     await f.dispose();
   });
 
