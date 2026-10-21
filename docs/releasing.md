@@ -347,6 +347,20 @@ For local-dev beta smoke before a stable release. Uses Changesets prerelease mod
 bun run release:beta
 ```
 
+### Local npm authorization
+
+Run from an interactive terminal without piping or redirecting output. The publisher inherits stdin, stdout, and stderr so npm can handle browser authorization or prompt for an OTP. Browser authorization is available when the registry returns a web challenge; numeric OTP remains the fallback. Account 2FA stays enabled.
+
+Inside agent-sandbox, use the configured host-browser bridge as npm's browser command:
+
+```bash
+npm_config_browser="$PLANNOTATOR_BROWSER" bun run release:beta
+```
+
+`PLANNOTATOR_BROWSER` must point to an available executable bridge. The existing Plannotator bridge opens on both the host and the forwarded laptop; use a local-only bridge if authorization should open on one machine only. No browser profile or cookie mount is needed.
+
+### Publish flow
+
 What the script does:
 
 1. Refuses to run in CI or without an interactive TTY.

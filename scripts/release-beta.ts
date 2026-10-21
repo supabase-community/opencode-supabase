@@ -103,6 +103,20 @@ async function runVerify(cwd: string): Promise<void> {
   await $`bun run verify:pack`.cwd(cwd).quiet();
 }
 
+export async function runBetaPublish(cwd: string): Promise<void> {
+  // npm needs a real terminal for browser authorization and OTP prompts.
+  const publisher = Bun.spawn(["bun", "run", "release", "--", "--no-git-tag"], {
+    cwd,
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  const status = await publisher.exited;
+  if (status !== 0) {
+    throw new Error(`publish command exited with code ${status}`);
+  }
+}
+
 async function main() {
   if (process.env.CI) abort("refusing to run in CI; beta publishes are local-dev only");
   if (!process.stdin.isTTY) abort("refusing to run without an interactive TTY");
@@ -167,7 +181,7 @@ async function main() {
     console.log("\n— publish (no git tag)");
     publishAttempted = true;
     try {
-      await $`bun run release -- --no-git-tag`.cwd(tmp);
+      await runBetaPublish(tmp);
     } catch (publishErr) {
       // npm publish is irreversible; the CLI may error after the registry
       // accepted the package. Probe dist-tags before deciding next steps.
