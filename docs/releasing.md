@@ -371,8 +371,17 @@ What the script does:
 6. Aborts if the generated version is not a `-beta.*` prerelease.
 7. Requires typing `publish beta` before publishing.
 8. Publishes with `changeset publish --no-git-tag` (no commit, no push, no git tag).
-9. Verifies npm `latest` is unchanged and `beta` points at the new version.
+9. Polls npm every five seconds for up to five minutes until `beta` points at the new version. Stops immediately if `latest` changes.
 10. Removes the temp worktree.
+
+A successful npm publish can precede registry visibility. The same polling budget applies when the publish command fails, because npm can accept a package before the command reports an error.
+
+If verification times out, the publish outcome remains unresolved. Do not republish or change dist-tags based only on stale metadata. Check the exact version and current tags first:
+
+```bash
+npm view opencode-supabase@<published-version> version
+npm view opencode-supabase dist-tags --json
+```
 
 Expected npm state after a successful run:
 
