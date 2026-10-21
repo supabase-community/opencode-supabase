@@ -35,7 +35,8 @@ async function onboard(ctx: Context, directory: string) {
   const done = onboarding.get(ctx) ?? new Set<string>();
   onboarding.set(ctx, done);
   if (!done.has(sessionID)) {
-    await ctx.client.session.prompt({ sessionID, text: ONBOARDING_MESSAGE, resume: false });
+    // A paused user prompt still counts as pending work in V2; onboarding is a notice, not a turn.
+    await ctx.client.session.synthetic({ sessionID, text: ONBOARDING_MESSAGE, description: ONBOARDING_MESSAGE, resume: false });
     done.add(sessionID);
   }
   if (route.type === "home") ctx.ui.router.navigate({ type: "session", sessionID });

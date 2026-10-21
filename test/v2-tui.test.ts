@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { Context } from "@opencode/plugin/tui/plugin";
+import { ONBOARDING_MESSAGE } from "../src/tui/dialog.tsx";
 import { setupV2Tui } from "../src/tui/v2.tsx";
 
 function fixture(accounts: { type: string; id: string; label: string }[] = []) {
@@ -12,6 +13,7 @@ function fixture(accounts: { type: string; id: string; label: string }[] = []) {
   const cancel = mock(async (_input: unknown) => undefined);
   const status = mock(async () => ({ data: { status: "complete" } }));
   const prompt = mock(async (_input: unknown) => undefined);
+  const synthetic = mock(async (_input: unknown) => undefined);
   const remove = mock(async (_input: unknown) => undefined);
   const activate = mock(async (_input: unknown) => undefined);
   const open = mock(async (_url: string) => undefined);
@@ -26,14 +28,14 @@ function fixture(accounts: { type: string; id: string; label: string }[] = []) {
     client: {
       integration: { get: async () => ({ data: { connections: accounts } }), oauth: { connect, status, cancel } },
       credential: { remove, activate },
-      session: { prompt },
+      session: { prompt, synthetic },
     },
     ui: { dialog: { select, confirm, show, clear() {}, set() {}, alert: async () => undefined },
       toast: { show: toast }, router: { current: () => ({ type: "session", sessionID: "session-A" }) } },
   } as unknown as Context;
   const dispose = setupV2Tui(ctx, open);
   if (!command) throw new Error("Missing /supabase command");
-  return { command, dispose, select, confirm, show, connect, cancel, status, prompt, remove, activate, open, toast };
+  return { command, dispose, select, confirm, show, connect, cancel, status, prompt, synthetic, remove, activate, open, toast };
 }
 
 describe("V2 /supabase", () => {
@@ -42,7 +44,10 @@ describe("V2 /supabase", () => {
     await f.command.run();
     expect(f.connect.mock.calls[0]?.[0]).toMatchObject({ integrationID: "supabase", methodID: "supabase", location: { directory: "/project-A" } });
     expect(f.open.mock.calls[0]?.[0]).toBe("https://example.com/oauth");
-    expect(f.prompt.mock.calls[0]?.[0]).toMatchObject({ sessionID: "session-A", resume: false });
+    expect(f.prompt).not.toHaveBeenCalled();
+    expect(f.synthetic.mock.calls).toEqual([[{
+      sessionID: "session-A", text: ONBOARDING_MESSAGE, description: ONBOARDING_MESSAGE, resume: false,
+    }]]);
     expect(f.cancel).not.toHaveBeenCalled();
     await f.dispose();
   });
@@ -58,7 +63,8 @@ describe("V2 /supabase", () => {
         { title: "Disconnect current account", value: "disconnect" },
       ],
     });
-    expect(f.prompt).toHaveBeenCalledTimes(1);
+    expect(f.prompt).not.toHaveBeenCalled();
+    expect(f.synthetic).toHaveBeenCalledTimes(1);
     expect(f.connect).not.toHaveBeenCalled();
     expect(f.activate).not.toHaveBeenCalled();
     await f.dispose();
@@ -101,6 +107,7 @@ describe("V2 /supabase", () => {
     await f.command.run();
     expect(f.cancel.mock.calls[0]?.[0]).toEqual({ integrationID: "supabase", attemptID: "attempt-A", location: { directory: "/project-A" } });
     expect(f.prompt).not.toHaveBeenCalled();
+    expect(f.synthetic).not.toHaveBeenCalled();
     expect(f.toast).toHaveBeenCalled();
     await f.dispose();
   });
