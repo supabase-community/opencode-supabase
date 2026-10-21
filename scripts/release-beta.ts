@@ -21,6 +21,8 @@ import { $ } from "bun";
 
 const CONFIRM_PHRASE = "publish beta";
 const PACKAGE_NAME = "opencode-supabase";
+// npm can accept a publish before the version and dist-tags become visible.
+export const BETA_DIST_TAG_TIMEOUT_MS = 5 * 60_000;
 
 class ReleaseBetaError extends Error {}
 
@@ -188,7 +190,14 @@ async function main() {
       console.error("\nrelease:beta: publish command failed; probing npm state.");
       let probed: Record<string, string>;
       try {
-        probed = await npmDistTags();
+        probed = await waitForBetaDistTag({
+          expectedBeta: newVersion,
+          expectedLatest: latestBefore,
+          readTags: npmDistTags,
+          sleep,
+          timeoutMs: BETA_DIST_TAG_TIMEOUT_MS,
+          intervalMs: 5_000,
+        });
       } catch (probeErr) {
         abort(
           `publish command failed and npm dist-tag probe failed; state unknown. Inspect npm manually before retrying. Underlying error: ${
@@ -196,14 +205,6 @@ async function main() {
           }; probe error: ${probeErr instanceof Error ? probeErr.message : String(probeErr)}`,
         );
       }
-      probed = await waitForBetaDistTag({
-        expectedBeta: newVersion,
-        expectedLatest: latestBefore,
-        readTags: npmDistTags,
-        sleep,
-        timeoutMs: 90_000,
-        intervalMs: 5_000,
-      });
       const betaOk = probed.beta === newVersion;
       const latestOk = probed.latest === latestBefore;
       const publishErrMsg = publishErr instanceof Error ? publishErr.message : String(publishErr);
@@ -219,7 +220,7 @@ async function main() {
       }
       if (!betaOk && latestOk) {
         abort(
-          `publish command failed; npm beta is "${probed.beta}", expected "${newVersion}". Inspect npm before retrying. Underlying error: ${publishErrMsg}`,
+          `publish command failed; npm beta is "${probed.beta}", expected "${newVersion}" after waiting for propagation. Publication may still be processing; do NOT republish or change dist-tags until npm state is checked. Underlying error: ${publishErrMsg}`,
         );
       }
       abort(
@@ -227,12 +228,13 @@ async function main() {
       );
     }
 
+    console.log(`\nWaiting up to ${BETA_DIST_TAG_TIMEOUT_MS / 60_000} minutes for npm beta propagation...`);
     const afterTags = await waitForBetaDistTag({
       expectedBeta: newVersion,
       expectedLatest: latestBefore,
       readTags: npmDistTags,
       sleep,
-      timeoutMs: 90_000,
+      timeoutMs: BETA_DIST_TAG_TIMEOUT_MS,
       intervalMs: 5_000,
     });
     console.log(`\nnpm latest after:  ${afterTags.latest}`);
@@ -246,8 +248,7 @@ async function main() {
     }
     if (afterTags.beta !== newVersion) {
       abort(
-        `npm beta is "${afterTags.beta}", expected "${newVersion}"; ` +
-          `fix with: npm dist-tag add ${PACKAGE_NAME}@${newVersion} beta`,
+        `publish command succeeded, but npm beta is still "${afterTags.beta}", expected "${newVersion}"; verification timed out. Publication may still be processing; do NOT republish or change dist-tags yet. Recheck with: npm view ${PACKAGE_NAME} dist-tags --json; check the version with: npm view ${PACKAGE_NAME}@${newVersion} version`,
       );
     }
     console.log("latest unchanged, beta points at new version. OK.");
