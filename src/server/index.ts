@@ -4,6 +4,7 @@ import { createServerLogWriter, createSupabaseLogger } from "../shared/log.ts";
 import { createSupabaseAuth } from "./auth.ts";
 import { registerSupabaseSkillPaths } from "./skills.ts";
 import { createSupabaseTools } from "./tools.ts";
+import { setupV2Server } from "./v2.ts";
 
 const server: Plugin = async (input, options) => {
   const logger = createSupabaseLogger({
@@ -21,4 +22,5 @@ const server: Plugin = async (input, options) => {
   };
 };
 
-export default { id: "supabase", server };
+// Both hosts resolve ./server. Each consumes only its own registration hook.
+export default { id: "supabase", server, effect: setupV2Server };

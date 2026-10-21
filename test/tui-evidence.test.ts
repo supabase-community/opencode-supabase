@@ -24,7 +24,7 @@ const workflows = await Promise.all(
 
 test("harness prunes upload-hostile host caches before evidence upload", () => {
   expect(harness).toContain(
-    'rm -rf "$ARTIFACT_DIR/cache/opencode/packages" "$ARTIFACT_DIR/npm/cache" "$ARTIFACT_DIR/config/opencode/node_modules" "$ARTIFACT_DIR/work/.opencode/node_modules" "$ARTIFACT_DIR/tmp"',
+    'rm -rf "$ARTIFACT_DIR/cache/opencode/packages" "$ARTIFACT_DIR/cache/opencode/npm" "$ARTIFACT_DIR/npm/cache" "$ARTIFACT_DIR/config/opencode/node_modules" "$ARTIFACT_DIR/work/.opencode/node_modules" "$ARTIFACT_DIR/tmp"',
   );
 });
 

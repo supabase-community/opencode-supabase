@@ -68,7 +68,7 @@ diagnostics() {
   # npm's cacache and the host's dependency installs are also >100MB of
   # non-diagnostic junk. All evidence files (pane, logs, metadata, tarball,
   # lockfiles) live outside these trees, so drop them before evidence upload.
-  rm -rf "$ARTIFACT_DIR/cache/opencode/packages" "$ARTIFACT_DIR/npm/cache" "$ARTIFACT_DIR/config/opencode/node_modules" "$ARTIFACT_DIR/work/.opencode/node_modules" "$ARTIFACT_DIR/tmp"
+  rm -rf "$ARTIFACT_DIR/cache/opencode/packages" "$ARTIFACT_DIR/cache/opencode/npm" "$ARTIFACT_DIR/npm/cache" "$ARTIFACT_DIR/config/opencode/node_modules" "$ARTIFACT_DIR/work/.opencode/node_modules" "$ARTIFACT_DIR/tmp"
 }
 trap diagnostics EXIT
 trap 'exit 130' INT
@@ -153,11 +153,10 @@ clean_env=(
 
 [[ ! -e "$ARTIFACT_DIR/home/.opencode" ]]
 if [[ "${OPENCODE_MAJOR:-0}" -ge 2 ]]; then
-  # V2: `opencode plugin add` is an interactive TUI wizard (hangs non-interactively),
-  # so register the plugin the way V2 reads it: project .opencode/opencode.json
-  # plugin array (verified with `opencode debug config`). No tui.json in V2.
+  # V2's installer accepts registry/Git specs, not local tarballs. Load the
+  # packed artifact through project config using the current `plugins` key.
   mkdir -p "$ARTIFACT_DIR/work/.opencode"
-  jq -n --arg spec "file:$TARBALL" '{plugin:[$spec]}' >"$ARTIFACT_DIR/work/.opencode/opencode.json"
+  jq -n --arg spec "file:$TARBALL" '{plugins:[$spec]}' >"$ARTIFACT_DIR/work/.opencode/opencode.json"
   printf 'Registered V2 plugin config: %s\n' "$(cat "$ARTIFACT_DIR/work/.opencode/opencode.json")" >"$ARTIFACT_DIR/install.stdout"
 else
   if ! (
@@ -173,7 +172,7 @@ fi
 metadata_files=(opencode.json)
 [[ "${OPENCODE_MAJOR:-0}" -lt 2 ]] && metadata_files+=(tui.json)
 for metadata in "${metadata_files[@]}"; do
-  jq -e --arg spec "file:$TARBALL" '.plugin == [$spec]' "$ARTIFACT_DIR/work/.opencode/$metadata" >/dev/null
+  jq -e --arg spec "file:$TARBALL" '(.plugins // .plugin) == [$spec]' "$ARTIFACT_DIR/work/.opencode/$metadata" >/dev/null
 done
 
 if [[ "${OPENCODE_MAJOR:-0}" -ge 2 ]]; then
