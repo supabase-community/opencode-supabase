@@ -91,6 +91,10 @@ function normalizeTokenResponse(payload: unknown): SupabaseTokenResponse {
   };
 }
 
+export function normalizeBrokerBaseUrl(baseUrl: string): string {
+  return baseUrl.replace(/\/$/, "");
+}
+
 async function makeBrokerRequest(
   config: BrokerConfig,
   endpoint: string,
@@ -98,7 +102,7 @@ async function makeBrokerRequest(
   fetchImpl: FetchLike,
   logger?: SupabaseLogger,
 ): Promise<SupabaseTokenResponse> {
-  const url = `${config.baseUrl.replace(/\/$/, "")}${endpoint}`;
+  const url = `${normalizeBrokerBaseUrl(config.baseUrl)}${endpoint}`;
 
   await logger?.debug("supabase broker request started", {
     endpoint,

@@ -9,7 +9,7 @@ import type { Credential } from "@opencode/schema/credential";
 import type { Skill } from "@opencode/schema/skill";
 import { Tool } from "@opencode/schema/tool";
 import { Effect } from "effect";
-import { refreshTokenThroughBroker } from "../shared/broker.ts";
+import { normalizeBrokerBaseUrl, refreshTokenThroughBroker } from "../shared/broker.ts";
 import { readSupabaseConfig } from "../shared/cfg.ts";
 import { createSupabaseLogger } from "../shared/log.ts";
 import type { SupabaseTokenResponse } from "../shared/types.ts";
@@ -26,6 +26,8 @@ type Definition = {
 };
 
 const fromPromise = <A>(run: () => Promise<A>) => Effect.tryPromise({ try: run, catch: (error) => error });
+// ponytail: success entries stay for process lifetime (one per rotation per account);
+// add an LRU cap only if that ever matters.
 const refreshes = new Map<string, Promise<SupabaseTokenResponse>>();
 
 export function setupV2Server(ctx: Context) {
@@ -71,12 +73,18 @@ export function setupV2Server(ctx: Context) {
         refresh: (credential) => fromPromise(async () => {
           const config = readSupabaseConfig(options);
           // Concurrent tools/Locations must not rotate the same refresh token twice.
-          const key = `${config.brokerBaseUrl}:${credential.refresh}`;
+          const key = `${normalizeBrokerBaseUrl(config.brokerBaseUrl)}:${credential.refresh}`;
           let pending = refreshes.get(key);
           if (!pending) {
             pending = refreshTokenThroughBroker(
               { baseUrl: config.brokerBaseUrl }, { refresh_token: credential.refresh }, undefined, logger,
-            ).finally(() => refreshes.delete(key));
+            ).catch((error) => {
+              // Success stays cached: the host persists the rotated credential only after
+              // refresh() resolves, so late resolves with the still-stored old (single-use)
+              // token must converge on the cached result instead of re-sending it.
+              refreshes.delete(key);
+              throw error;
+            });
             refreshes.set(key, pending);
           }
           const tokens = await pending;
