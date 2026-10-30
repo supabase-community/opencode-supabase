@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.0
+
+### Minor Changes
+
+- 88c3305: Add OpenCode 2.0.27 support while preserving OpenCode 1.17.4+ compatibility. Both server and TUI entrypoints expose the appropriate host hook. V2 uses native integration credentials for the host's active account, account-specific refresh and disconnect, and scoped OAuth cleanup; existing V1 local credentials require a new login on V2. Keep real Zod tool schemas for both hosts, register bundled skills, and port `/supabase` with browser authorization and onboarding. The connected V2 dialog uses OpenCode's native selection component for plugin-defined Continue/Disconnect actions; advanced account management stays in V2's native `/connect` integration UI. Add V2 packed-TUI CI coverage and prune V2's npm cache before uploading diagnostics.
+
+  Builds on Rafael Santos's (@rafaelsnv) initial V2 migration in PR #79.
+
+### Patch Changes
+
+- e918865: Make the packed-TUI e2e harness compatible with OpenCode V2 (`@opencode/cli`): register the plugin by writing project `.opencode/opencode.json` (V2 `plugin add` is an interactive wizard), use lowercase `--log-level debug`, and isolate the V2 managed `serve --service` daemon on its own port. V1 behavior unchanged.
+- 0acee2b: Fix the OAuth callback writing tokens to the wrong local auth store (#32). Persist tokens against the per-flow pending auth entry (keyed by state) instead of the singleton callback server's first-call input, so concurrent flows for different directories no longer cross-write each other's store.
+- daa6816: Fix V2 OAuth refresh dedup dropping its entry too early and keying on the raw broker URL (#90, #91). Keep a successful refresh cached under the consumed old refresh token until the process ends: the OpenCode host persists the rotated credential only after `refresh()` resolves, so a second resolve in that window must converge on the cached result instead of re-sending the single-use token (broker 401). Failed refreshes still delete the entry so waiters are released and a retry reaches the broker. Dedup keys now strip the trailing slash with the same normalization `makeBrokerRequest()` applies, so `https://host/broker` and `https://host/broker/` aliases no longer send the credential twice.
+- e549fc1: Refresh vendored Supabase skills from `supabase/agent-skills` v0.1.9 (commit `544bfc5`). Adds scoped personal access token guidance, declarative schema workflow, and a debugging section to the `supabase` skill; broadens the `supabase-postgres-best-practices` trigger description; records both skill changelogs. Provenance updated in `skills/.upstream.json`. Context: #46.
+
 ## 0.5.1
 
 ### Patch Changes
