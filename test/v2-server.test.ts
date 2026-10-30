@@ -23,7 +23,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-async function setup() {
+async function setup(optionOverrides: Record<string, unknown> = {}) {
   const directory = await mkdtemp(join(tmpdir(), "supabase-v2-test-"));
   roots.push(directory);
   const scope = await Effect.runPromise(Scope.make());
@@ -34,7 +34,7 @@ async function setup() {
   let account = { type: "oauth", methodID: "supabase", access: "host-A", refresh: "refresh-A", expires: Date.now() + 3600000 } as Credential.OAuth;
   let activeCalls = 0;
   const context = {
-    options: { skills: false, brokerBaseUrl: "https://example.com/broker" },
+    options: { skills: false, brokerBaseUrl: "https://example.com/broker", ...optionOverrides },
     location: { directory, project: { directory } },
     integration: {
       transform: (f: (editor: IntegrationEditor) => void) => Effect.sync(() => f({
@@ -123,6 +123,78 @@ describe("V2 server", () => {
     ]);
     expect(requests).toEqual(["A", "B"]);
     expect(results.map((r) => r.access)).toEqual(["A-access", "A-access", "B-access"]);
+  });
+
+  test("a second resolve in the host persistence gap converges on the completed refresh", async () => {
+    const instance = await setup();
+    const requests: string[] = [];
+    globalThis.fetch = (async (_url, init) => {
+      const token = JSON.parse(String(init?.body)).refresh_token;
+      requests.push(token);
+      if (requests.filter((t) => t === token).length > 1) {
+        return Response.json({ error: { code: "unauthorized", message: "refresh token already used" } }, { status: 401 });
+      }
+      return Response.json({ access_token: "gap-new-access", refresh_token: "gap-new-refresh", expires_in: 3600, token_type: "bearer" });
+    }) as typeof fetch;
+    const old = { type: "oauth", methodID: "supabase", access: "gap-old-access", refresh: "gap-A", expires: 0 } as Credential.OAuth;
+    const first = await Effect.runPromise(instance.method.refresh(old));
+    // The first refresh fully resolved: the broker response has landed, and the host
+    // still has the old token stored (nothing persisted it). The gap is maximal here.
+    const second = await Effect.runPromise(instance.method.refresh({ ...old }));
+    const a = first;
+    const b = second;
+    expect(requests).toEqual(["gap-A"]);
+    expect(a.access).toBe("gap-new-access");
+    expect(b.access).toBe("gap-new-access");
+    expect(b.refresh).toBe("gap-new-refresh");
+  });
+
+  test("failed refreshes release waiters, drop the pending entry, and retry hits the broker again", async () => {
+    const instance = await setup();
+    let calls = 0;
+    globalThis.fetch = (async (_url, _init) => {
+      calls++;
+      return Response.json({ error: { code: "unauthorized", message: "invalid" } }, { status: 401 });
+    }) as typeof fetch;
+    const cred = { type: "oauth", methodID: "supabase", access: "x", refresh: "fail-A", expires: 0 } as Credential.OAuth;
+    const settled = await Promise.allSettled([
+      Effect.runPromise(instance.method.refresh(cred)),
+      Effect.runPromise(instance.method.refresh({ ...cred })),
+    ]);
+    expect(settled.map((s) => s.status)).toEqual(["rejected", "rejected"]);
+    expect(calls).toBe(1);
+    globalThis.fetch = (async (_url, _init) =>
+      Response.json({ access_token: "retry-access", refresh_token: "retry-refresh", expires_in: 3600, token_type: "bearer" })) as typeof fetch;
+    const retried = await Effect.runPromise(instance.method.refresh(cred));
+    expect(retried.access).toBe("retry-access");
+    expect(calls).toBe(1);
+  });
+
+  test("trailing-slash broker aliases share one refresh; distinct brokers and tokens stay isolated", async () => {
+    const plain = await setup();
+    const slashed = await setup({ brokerBaseUrl: "https://example.com/broker/" });
+    const other = await setup({ brokerBaseUrl: "https://other.example.com/broker" });
+    const path2 = await setup({ brokerBaseUrl: "https://example.com/broker2" });
+    const requests: string[] = [];
+    globalThis.fetch = (async (url, init) => {
+      const token = JSON.parse(String(init?.body)).refresh_token;
+      requests.push(`${String(url)}|${token}`);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return Response.json({ access_token: `${token}-access`, refresh_token: `${token}-next`, expires_in: 3600, token_type: "bearer" });
+    }) as typeof fetch;
+    const cred = { type: "oauth", methodID: "supabase", access: "expired", refresh: "alias-A", expires: 0 } as Credential.OAuth;
+    const results = await Promise.all([
+      Effect.runPromise(plain.method.refresh(cred)),
+      Effect.runPromise(slashed.method.refresh({ ...cred })),
+      Effect.runPromise(other.method.refresh({ ...cred, refresh: "alias-B" })),
+      Effect.runPromise(path2.method.refresh({ ...cred })),
+    ]);
+    expect(requests).toEqual([
+      "https://example.com/broker/refresh|alias-A",
+      "https://other.example.com/broker/refresh|alias-B",
+      "https://example.com/broker2/refresh|alias-A",
+    ]);
+    expect(results.map((r) => r.access)).toEqual(["alias-A-access", "alias-A-access", "alias-B-access", "alias-A-access"]);
   });
 
   test("closing one location leaves another location's OAuth pending; attempt scope cancels only its flow", async () => {
