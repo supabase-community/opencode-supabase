@@ -17,8 +17,9 @@ describe("phase 1 package contract", () => {
   });
 
   test("documents plugin install and debug log capture guidance", () => {
-    expect(readme).toContain("Requires OpenCode `>= 1.17.4`.");
+    expect(readme).toContain("Supports OpenCode 1 (`>= 1.17.4`) and OpenCode 2 (`>= 2.0.27`).");
     expect(readme).toContain("opencode plugin opencode-supabase");
+    expect(readme).toContain("opencode plugin add opencode-supabase");
     expect(troubleshooting).toContain("collect the newest OpenCode session log");
     expect(troubleshooting).toContain("opencode --log-level DEBUG --print-logs");
     expect(troubleshooting).toContain("~/.local/share/opencode/log/");

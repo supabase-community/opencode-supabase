@@ -55,10 +55,12 @@ export type SupabaseToolInput = {
   worktree: string;
 };
 
-type SupabaseToolContext = Pick<
-  ToolContext,
-  "directory" | "worktree" | "abort" | "sessionID" | "messageID" | "agent" | "metadata" | "ask"
->;
+type SupabaseToolContext = Pick<ToolContext, "sessionID" | "messageID" | "agent">;
+
+// V2 owns credentials and account selection; V1 keeps its existing local store.
+type SupabaseToolSource = SupabaseToolInput | {
+  resolveAuth: () => Promise<SavedAuth>;
+};
 
 export type SupabaseAuthStatus =
   | {
@@ -119,8 +121,12 @@ function sanitizeToolArgs(name: string, args: Record<string, unknown>) {
   return next;
 }
 
+async function resolveToolAuth(input: SupabaseToolSource, options: PluginOptions | undefined, deps: ToolDeps) {
+  return "resolveAuth" in input ? input.resolveAuth() : ensureSupabaseToolAuth(input, options, deps);
+}
+
 async function executeSupabaseRequest(
-  input: SupabaseToolInput,
+  input: SupabaseToolSource,
   options: PluginOptions | undefined,
   deps: ToolDeps,
   toolName: string,
@@ -138,7 +144,7 @@ async function executeSupabaseRequest(
   });
   try {
     const config = readSupabaseConfig(options);
-    const auth = await ensureSupabaseToolAuth(input, options, deps);
+    const auth = await resolveToolAuth(input, options, deps);
     const response = await supabaseManagementApiFetch(
       config,
       auth.access,
@@ -182,7 +188,7 @@ async function executeSupabaseRequest(
 }
 
 async function executeSupabaseGet(
-  input: SupabaseToolInput,
+  input: SupabaseToolSource,
   options: PluginOptions | undefined,
   deps: ToolDeps,
   toolName: string,
@@ -453,7 +459,7 @@ function formatMcpSetupResult(url: string) {
 }
 
 export function createSupabaseTools(
-  input: SupabaseToolInput,
+  input: SupabaseToolSource,
   options?: PluginOptions,
   deps: ToolDeps = {},
 ) {
@@ -546,7 +552,7 @@ export function createSupabaseTools(
         project_ref: tool.schema.string().describe("Supabase project reference ID"),
       },
       async execute(args, _context: SupabaseToolContext) {
-        await ensureSupabaseToolAuth(input, options, deps);
+        await resolveToolAuth(input, options, deps);
         const url = createMcpSetupUrl(args.project_ref);
         const openBrowser = deps.open ?? open;
         await openBrowser(url);
